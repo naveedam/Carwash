@@ -137,16 +137,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <Plus className="w-4 h-4" />
               <span>Onboard Bangalore Complex</span>
             </button>
-
-            {onOpenDbGuide && (
-              <button
-                onClick={onOpenDbGuide}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <Database className="w-4 h-4 text-cyan-400" />
-                <span>DB & SQL Schema</span>
-              </button>
-            )}
           </div>
         </div>
 

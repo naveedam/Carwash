@@ -32,7 +32,19 @@ export default function App() {
   // Auth & User State
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('aqua_user');
-    return saved ? JSON.parse(saved) : null; // Public visitors start in signed-out state by default
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.id === 'u-1' || parsed.email === 'priya.sharma@example.in') {
+          localStorage.removeItem('aqua_user');
+          return null;
+        }
+        return parsed;
+      } catch {
+        return null;
+      }
+    }
+    return null; // Public visitors start in signed-out state by default
   });
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isDbGuideOpen, setIsDbGuideOpen] = useState<boolean>(false);
@@ -274,7 +286,6 @@ export default function App() {
             onUpdateStatus={handleUpdateStatus}
             onUpdateTechnician={handleUpdateTechnician}
             onAddApartment={handleAddApartment}
-            onOpenDbGuide={() => setIsDbGuideOpen(true)}
           />
         )}
       </main>
@@ -287,14 +298,8 @@ export default function App() {
             <span>•</span>
             <span>Doorstep Waterless Vehicle Detailing</span>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsDbGuideOpen(true)}
-              className="hover:text-cyan-400 underline flex items-center gap-1 cursor-pointer"
-            >
-              <Database className="w-3 h-3 text-cyan-400" />
-              <span>SQL Schema & Database Documentation</span>
-            </button>
+          <div className="text-slate-500 text-[11px]">
+            © {new Date().getFullYear()} AquaDoor Technologies. All rights reserved.
           </div>
         </div>
       </footer>
