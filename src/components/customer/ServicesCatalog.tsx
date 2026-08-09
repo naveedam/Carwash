@@ -9,7 +9,8 @@ import {
   ChevronRight,
   Leaf,
   ThumbsUp,
-  Car
+  Car,
+  IndianRupee
 } from 'lucide-react';
 import { ServicePackage, VehicleType } from '../../types';
 
@@ -34,7 +35,7 @@ export const ServicesCatalog: React.FC<ServicesCatalogProps> = ({
         <div className="max-w-2xl relative z-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 text-xs font-semibold border border-cyan-500/30 mb-3">
             <Leaf className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Eco Waterless Detailing at Parking Slot</span>
+            <span>Eco Waterless Detailing at Bangalore Apartment Parking Slots</span>
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
@@ -42,17 +43,17 @@ export const ServicesCatalog: React.FC<ServicesCatalogProps> = ({
           </h1>
 
           <p className="text-slate-300 text-sm leading-relaxed mb-6">
-            Our certified doorstep detailers bring specialized scratch-free foam, high-grade microfibers, and mobile steam units straight to your apartment parking bay.
+            Our certified doorstep detailers bring specialized scratch-free foam, high-grade microfibers, and mobile steam units straight to your apartment parking bay across Bangalore.
           </p>
 
           {/* Body Type Selector Pill */}
           <div className="bg-slate-950/80 p-2 rounded-xl border border-slate-800 inline-flex flex-wrap items-center gap-2">
             <span className="text-xs text-slate-400 font-semibold px-2">Select Vehicle Type:</span>
             {[
-              { type: 'hatchback' as const, label: 'Hatchback' },
-              { type: 'sedan' as const, label: 'Sedan' },
-              { type: 'suv' as const, label: 'SUV' },
-              { type: 'luxury' as const, label: 'Luxury' },
+              { type: 'hatchback' as const, label: 'Hatchback (Swift, i20)' },
+              { type: 'sedan' as const, label: 'Sedan (City, Verna)' },
+              { type: 'suv' as const, label: 'SUV (Harrier, Creta)' },
+              { type: 'luxury' as const, label: 'Luxury (BMW, Audi)' },
             ].map((v) => (
               <button
                 key={v.type}
@@ -96,85 +97,44 @@ export const ServicesCatalog: React.FC<ServicesCatalogProps> = ({
                     <p className="text-xs text-slate-400 mt-0.5">{srv.shortDesc}</p>
                   </div>
                   <div className="text-right shrink-0 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-slate-800">
-                    <span className="text-2xl font-extrabold text-cyan-400">${price}</span>
+                    <span className="text-2xl font-extrabold text-cyan-400">₹{price}</span>
                     <span className="text-[10px] text-slate-400 block capitalize">{selectedVehicleType}</span>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-300 leading-relaxed mb-4">{srv.description}</p>
+                <p className="text-xs text-slate-300 mb-4 leading-relaxed">{srv.description}</p>
 
                 <div className="space-y-2 mb-6">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Included Features:</span>
-                  {srv.features.map((feat, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-xs text-slate-300">
-                      <div className="w-4 h-4 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
-                        <Check className="w-2.5 h-2.5" />
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Service Highlights:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {srv.features.map((feat, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-slate-200">
+                        <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span>{feat}</span>
                       </div>
-                      <span>{feat}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
 
               <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
-                <span className="text-xs text-slate-400 flex items-center gap-1">
+                <div className="flex items-center gap-1.5 text-xs text-slate-400">
                   <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                  Takes ~{srv.durationMinutes} mins
-                </span>
+                  <span>{srv.durationMinutes} mins estimated time</span>
+                </div>
 
                 <button
                   onClick={() => onBookService(srv.id)}
-                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <span>Select & Book</span>
+                  <span>Book for ₹{price}</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+
             </div>
           );
         })}
-      </div>
-
-      {/* Why Waterless Doorstep Wash Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 space-y-6">
-        <div className="text-center max-w-xl mx-auto">
-          <h2 className="text-xl font-bold text-white">Why Apartment Residents Love AquaDoor</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Engineered for high-density modern apartment parking lots and basement garages.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-2">
-          <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 text-center">
-            <div className="w-10 h-10 bg-cyan-500/20 text-cyan-400 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Droplets className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-white mb-1">Zero Water Puddles</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Our eco-friendly lubricants encapsulate dirt particles so no messy runoff spills into apartment parking bays.
-            </p>
-          </div>
-
-          <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 text-center">
-            <div className="w-10 h-10 bg-cyan-500/20 text-cyan-400 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Shield className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-white mb-1">Scratch-Free Guarantee</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              We use plush 800 GSM deep-pile microfiber towels refreshed for every single car to prevent swirl marks.
-            </p>
-          </div>
-
-          <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 text-center">
-            <div className="w-10 h-10 bg-cyan-500/20 text-cyan-400 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Award className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-white mb-1">Verified Technicians</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Background-checked specialists assigned permanently to your apartment complex for maximum trust.
-            </p>
-          </div>
-        </div>
       </div>
 
     </div>

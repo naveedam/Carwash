@@ -1,6 +1,18 @@
 import React from 'react';
-import { Sparkles, Shield, Car, Calendar, MapPin, CheckCircle2 } from 'lucide-react';
-import { ViewMode, CustomerTab, ApartmentComplex } from '../types';
+import {
+  Sparkles,
+  Shield,
+  Car,
+  Calendar,
+  MapPin,
+  Database,
+  LogIn,
+  LogOut,
+  UserCheck,
+  User as UserIcon,
+  IndianRupee
+} from 'lucide-react';
+import { ViewMode, CustomerTab, ApartmentComplex, User } from '../types';
 
 interface NavbarProps {
   viewMode: ViewMode;
@@ -11,6 +23,10 @@ interface NavbarProps {
   apartments: ApartmentComplex[];
   onSelectApartment: (apt: ApartmentComplex) => void;
   activeBookingsCount: number;
+  currentUser: User | null;
+  onOpenAuth: () => void;
+  onLogout: () => void;
+  onOpenDbGuide: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -22,14 +38,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   apartments,
   onSelectApartment,
   activeBookingsCount,
+  currentUser,
+  onOpenAuth,
+  onLogout,
+  onOpenDbGuide,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 text-white shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-16 gap-3">
           
           {/* Logo & Brand */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCustomerTab('book')}>
+          <div className="flex items-center gap-3 cursor-pointer shrink-0" onClick={() => setCustomerTab('book')}>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/20 ring-1 ring-white/20">
               <Sparkles className="w-5 h-5 animate-pulse" />
             </div>
@@ -39,25 +59,25 @@ export const Navbar: React.FC<NavbarProps> = ({
                   AquaDoor
                 </span>
                 <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  Doorstep Wash
+                  Bangalore Doorstep
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">Car Detailing directly at your apartment parking slot</p>
+              <p className="text-[11px] text-slate-400 hidden sm:block">Waterless car detailing at your apartment slot • INR (₹)</p>
             </div>
           </div>
 
-          {/* Quick Apartment Selector (Customer Mode) */}
+          {/* Quick Bangalore Apartment Selector (Customer Mode) */}
           {viewMode === 'customer' && (
-            <div className="hidden md:flex items-center gap-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-slate-200 transition-all">
+            <div className="hidden lg:flex items-center gap-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-slate-200 transition-all">
               <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span className="text-slate-400">Location:</span>
+              <span className="text-slate-400">Complex:</span>
               <select
                 value={activeApartment.id}
                 onChange={(e) => {
                   const selected = apartments.find((a) => a.id === e.target.value);
                   if (selected) onSelectApartment(selected);
                 }}
-                className="bg-transparent text-slate-100 font-medium focus:outline-none cursor-pointer pr-1"
+                className="bg-transparent text-slate-100 font-medium focus:outline-none cursor-pointer pr-1 max-w-[200px] truncate"
               >
                 {apartments.map((apt) => (
                   <option key={apt.id} value={apt.id} className="bg-slate-900 text-slate-100">
@@ -68,36 +88,46 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Right Navigation & View Switcher */}
-          <div className="flex items-center gap-3">
+          {/* Right Navigation & Controls */}
+          <div className="flex items-center gap-2 sm:gap-3">
             
+            {/* Database Guide Button */}
+            <button
+              onClick={onOpenDbGuide}
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs text-cyan-300 transition-all cursor-pointer"
+              title="View SQL Schema & Database Guide"
+            >
+              <Database className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-semibold text-[11px]">DB & SQL Guide</span>
+            </button>
+
             {/* Customer Navigation Tabs */}
             {viewMode === 'customer' && (
               <nav className="flex items-center gap-1 bg-slate-800/60 p-1 rounded-xl border border-slate-700/60">
                 <button
                   onClick={() => setCustomerTab('book')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     customerTab === 'book'
-                      ? 'bg-cyan-500 text-white shadow-sm'
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm font-bold'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                   }`}
                 >
                   <Car className="w-3.5 h-3.5" />
-                  <span>Book Wash</span>
+                  <span className="hidden xs:inline">Book Wash</span>
                 </button>
 
                 <button
                   onClick={() => setCustomerTab('my-bookings')}
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     customerTab === 'my-bookings'
-                      ? 'bg-cyan-500 text-white shadow-sm'
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm font-bold'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                   }`}
                 >
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>My Washes</span>
+                  <span className="hidden xs:inline">My Washes</span>
                   {activeBookingsCount > 0 && (
-                    <span className="ml-1 px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950 font-bold text-[10px]">
+                    <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950 font-bold text-[10px]">
                       {activeBookingsCount}
                     </span>
                   )}
@@ -107,7 +137,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={() => setCustomerTab('services')}
                   className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     customerTab === 'services'
-                      ? 'bg-cyan-500 text-white shadow-sm'
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm font-bold'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                   }`}
                 >
@@ -126,25 +156,62 @@ export const Navbar: React.FC<NavbarProps> = ({
                     ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Customer booking view"
+                title="Customer view"
               >
                 <Car className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Customer</span>
+                <span className="hidden sm:inline">Customer</span>
               </button>
 
               <button
-                onClick={() => setViewMode('admin')}
+                onClick={() => {
+                  setViewMode('admin');
+                  if (!currentUser || currentUser.role !== 'admin') {
+                    // Switch to admin view automatically or prompt
+                  }
+                }}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                   viewMode === 'admin'
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Operations / Admin dashboard view"
+                title="Admin / Operations Panel"
               >
-                <Shield className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Admin / Ops</span>
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Admin Panel</span>
               </button>
             </div>
+
+            {/* User Account / Auth Button */}
+            {currentUser ? (
+              <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/80 rounded-xl px-2.5 py-1">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                  {currentUser.fullName.charAt(0)}
+                </div>
+                <div className="hidden md:block text-left">
+                  <span className="text-xs font-bold text-white block truncate max-w-[100px] leading-tight">
+                    {currentUser.fullName}
+                  </span>
+                  <span className="text-[10px] text-cyan-400 uppercase font-semibold block leading-none">
+                    {currentUser.role}
+                  </span>
+                </div>
+                <button
+                  onClick={onLogout}
+                  className="text-slate-400 hover:text-red-400 p-1 transition-all ml-1 cursor-pointer"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition-all cursor-pointer shrink-0"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In / Register</span>
+              </button>
+            )}
 
           </div>
 

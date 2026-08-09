@@ -4,11 +4,14 @@ import { BookingWizard } from './components/customer/BookingWizard';
 import { ActiveBookings } from './components/customer/ActiveBookings';
 import { ServicesCatalog } from './components/customer/ServicesCatalog';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AuthModal } from './components/AuthModal';
+import { DatabaseGuideModal } from './components/DatabaseGuideModal';
 import {
   APARTMENT_COMPLEXES,
   SERVICE_PACKAGES,
   TIME_SLOTS,
-  INITIAL_BOOKINGS
+  INITIAL_BOOKINGS,
+  DEMO_USERS
 } from './data/mockData';
 import {
   ViewMode,
@@ -16,16 +19,25 @@ import {
   Booking,
   ApartmentComplex,
   ServicePackage,
-  BookingStatus
+  BookingStatus,
+  User
 } from './types';
-import { CheckCircle2, Info, Sparkles } from 'lucide-react';
+import { CheckCircle2, Database, Shield } from 'lucide-react';
 
 export default function App() {
-  // Navigation State
+  // Navigation & View State
   const [viewMode, setViewMode] = useState<ViewMode>('customer');
   const [customerTab, setCustomerTab] = useState<CustomerTab>('book');
 
-  // Persistence State
+  // Auth & User State
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('aqua_user');
+    return saved ? JSON.parse(saved) : DEMO_USERS[0]; // Default logged in as Customer (Priya Sharma)
+  });
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isDbGuideOpen, setIsDbGuideOpen] = useState<boolean>(false);
+
+  // Data Persistence State
   const [apartments, setApartments] = useState<ApartmentComplex[]>(() => {
     const saved = localStorage.getItem('aqua_apartments');
     return saved ? JSON.parse(saved) : APARTMENT_COMPLEXES;
@@ -33,7 +45,7 @@ export default function App() {
 
   const [activeApartment, setActiveApartment] = useState<ApartmentComplex>(apartments[0]);
 
-  const [services] = useState<ServicePackage[]>(SERVICE_PACKAGES);
+  const [services, setServices] = useState<ServicePackage[]>(SERVICE_PACKAGES);
 
   const [bookings, setBookings] = useState<Booking[]>(() => {
     const saved = localStorage.getItem('aqua_bookings');
@@ -41,6 +53,37 @@ export default function App() {
   });
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Fetch initial data from Express REST API
+  useEffect(() => {
+    fetch('/api/apartments')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.length > 0) {
+          setApartments(data.data);
+          setActiveApartment(data.data[0]);
+        }
+      })
+      .catch(() => console.log('Using local apartments fallback'));
+
+    fetch('/api/services')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.length > 0) {
+          setServices(data.data);
+        }
+      })
+      .catch(() => console.log('Using local services fallback'));
+
+    fetch('/api/bookings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.length > 0) {
+          setBookings(data.data);
+        }
+      })
+      .catch(() => console.log('Using local bookings fallback'));
+  }, []);
 
   // Sync to LocalStorage
   useEffect(() => {
@@ -50,6 +93,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('aqua_apartments', JSON.stringify(apartments));
   }, [apartments]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('aqua_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('aqua_user');
+    }
+  }, [currentUser]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -65,7 +116,14 @@ export default function App() {
     };
 
     setBookings((prev) => [newBooking, ...prev]);
-    showToast(`New wash scheduled at ${newBooking.apartmentName} (${newBooking.id})`);
+    showToast(`New doorstep wash scheduled at ${newBooking.apartmentName} (${newBooking.id})`);
+
+    // Sync to Express Backend API
+    fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newBookingData),
+    }).catch((err) => console.error('API Sync Error:', err));
   };
 
   const handleCancelBooking = (bookingId: string) => {
@@ -73,6 +131,12 @@ export default function App() {
       prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' as const } : b))
     );
     showToast(`Booking ${bookingId} cancelled.`);
+
+    fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    }).catch((err) => console.error('API Patch Error:', err));
   };
 
   const handleUpdateStatus = (bookingId: string, status: BookingStatus) => {
@@ -80,6 +144,12 @@ export default function App() {
       prev.map((b) => (b.id === bookingId ? { ...b, status } : b))
     );
     showToast(`Status updated to "${status.replace('_', ' ')}" for ${bookingId}`);
+
+    fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }).catch((err) => console.error('API Patch Error:', err));
   };
 
   const handleUpdateTechnician = (bookingId: string, techName: string) => {
@@ -87,16 +157,28 @@ export default function App() {
       prev.map((b) => (b.id === bookingId ? { ...b, technicianName: techName } : b))
     );
     showToast(`Assigned ${techName} to ${bookingId}`);
+
+    fetch(`/api/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ technicianName: techName }),
+    }).catch((err) => console.error('API Patch Error:', err));
   };
 
   const handleAddApartment = (newApt: Omit<ApartmentComplex, 'id' | 'activeSlotsCount'>) => {
     const created: ApartmentComplex = {
       ...newApt,
       id: `apt-${Date.now()}`,
-      activeSlotsCount: 10,
+      activeSlotsCount: 12,
     };
     setApartments((prev) => [...prev, created]);
-    showToast(`Added new apartment complex: ${created.name}`);
+    showToast(`Onboarded new Bangalore complex: ${created.name}`);
+
+    fetch('/api/apartments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newApt),
+    }).catch((err) => console.error('API Post Error:', err));
   };
 
   const activeBookingsCount = bookings.filter(
@@ -106,7 +188,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950 antialiased">
       
-      {/* Navigation Topbar */}
+      {/* Top Navbar */}
       <Navbar
         viewMode={viewMode}
         setViewMode={setViewMode}
@@ -116,9 +198,16 @@ export default function App() {
         apartments={apartments}
         onSelectApartment={setActiveApartment}
         activeBookingsCount={activeBookingsCount}
+        currentUser={currentUser}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onLogout={() => {
+          setCurrentUser(null);
+          showToast('Signed out successfully.');
+        }}
+        onOpenDbGuide={() => setIsDbGuideOpen(true)}
       />
 
-      {/* Floating Toast Notification */}
+      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-cyan-500/50 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-bounce">
           <CheckCircle2 className="w-5 h-5 text-cyan-400 shrink-0" />
@@ -126,7 +215,25 @@ export default function App() {
         </div>
       )}
 
-      {/* Main View Router */}
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          showToast(`Welcome ${user.fullName} (${user.role.toUpperCase()})`);
+          if (user.role === 'admin') setViewMode('admin');
+        }}
+        apartments={apartments}
+      />
+
+      {/* Database Guide Modal */}
+      <DatabaseGuideModal
+        isOpen={isDbGuideOpen}
+        onClose={() => setIsDbGuideOpen(false)}
+      />
+
+      {/* Main Content Router */}
       <main className="pb-16">
         {viewMode === 'customer' ? (
           <>
@@ -167,6 +274,7 @@ export default function App() {
             onUpdateStatus={handleUpdateStatus}
             onUpdateTechnician={handleUpdateTechnician}
             onAddApartment={handleAddApartment}
+            onOpenDbGuide={() => setIsDbGuideOpen(true)}
           />
         )}
       </main>
@@ -175,11 +283,19 @@ export default function App() {
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-300">AquaDoor Wash MVP</span>
+            <span className="font-bold text-slate-300">AquaDoor Bangalore</span>
             <span>•</span>
             <span>Doorstep Waterless Vehicle Detailing</span>
           </div>
-          <p>Designed for Apartment Complexes & Gated Communities</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsDbGuideOpen(true)}
+              className="hover:text-cyan-400 underline flex items-center gap-1 cursor-pointer"
+            >
+              <Database className="w-3 h-3 text-cyan-400" />
+              <span>SQL Schema & Database Documentation</span>
+            </button>
+          </div>
         </div>
       </footer>
 

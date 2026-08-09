@@ -4,38 +4,82 @@ import { createServer as createViteServer } from "vite";
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   app.use(express.json());
 
-  // In-Memory MVP Data Store (mirrors SQL Schema)
+  // In-Memory MVP Data Store with Bangalore Real Apartments & INR Pricing
+  let users = [
+    {
+      id: "u-admin",
+      email: "admin@aquadoor.in",
+      fullName: "Naveed Ahmed (Operations Manager)",
+      phone: "+91 98765 43210",
+      role: "admin",
+    },
+    {
+      id: "u-cust1",
+      email: "priya.sharma@example.in",
+      fullName: "Priya Sharma",
+      phone: "+91 98123 45678",
+      role: "customer",
+      apartmentId: "apt-1",
+    },
+    {
+      id: "u-cust2",
+      email: "rahul.verma@example.in",
+      fullName: "Rahul Verma",
+      phone: "+91 97654 32109",
+      role: "customer",
+      apartmentId: "apt-2",
+    },
+  ];
+
   let apartments = [
     {
       id: "apt-1",
-      name: "Sunrise Towers & Enclave",
-      address: "104 Westside Parkway, Block A-D",
-      area: "Downtown North",
-      totalBlocks: 4,
-      assignedTechnician: "Alex Rivera (Lead Tech)",
-      activeSlotsCount: 12,
+      name: "Prestige Shantiniketan",
+      address: "ITPL Main Road, Whitefield",
+      area: "Whitefield Zone",
+      totalBlocks: 24,
+      assignedTechnician: "Ramesh Kumar (Lead Tech)",
+      activeSlotsCount: 18,
     },
     {
       id: "apt-2",
-      name: "Oakwood Heights",
-      address: "452 Elm Street, Towers 1-3",
-      area: "West End",
-      totalBlocks: 3,
-      assignedTechnician: "David Miller",
-      activeSlotsCount: 8,
+      name: "Sobha Neopolis",
+      address: "Panathur Main Road, Kadubeesanahalli",
+      area: "ORR / Marathahalli",
+      totalBlocks: 19,
+      assignedTechnician: "Suresh Nair",
+      activeSlotsCount: 14,
     },
     {
       id: "apt-3",
-      name: "The Grand Residency",
-      address: "88 Skyline Boulevard",
-      area: "Financial District",
-      totalBlocks: 6,
-      assignedTechnician: "Marcus Vance",
+      name: "Brigade Gateway",
+      address: "26/1 Dr Rajkumar Rd, Rajajinagar",
+      area: "Malleshwaram / West",
+      totalBlocks: 7,
+      assignedTechnician: "Manjunath Gowda",
+      activeSlotsCount: 12,
+    },
+    {
+      id: "apt-4",
+      name: "Salarpuria Sattva Greenage",
+      address: "Hosur Main Road, Bommanahalli",
+      area: "Electronic City / South",
+      totalBlocks: 10,
+      assignedTechnician: "Vikram Singh",
       activeSlotsCount: 15,
+    },
+    {
+      id: "apt-5",
+      name: "Adarsh Palm Retreat",
+      address: "Outer Ring Road, Bellandur",
+      area: "Bellandur / Sarjapur",
+      totalBlocks: 12,
+      assignedTechnician: "Suresh Nair",
+      activeSlotsCount: 16,
     },
   ];
 
@@ -44,10 +88,10 @@ async function startServer() {
       id: "srv-1",
       name: "Express Exterior Eco-Wash",
       category: "exterior",
-      shortDesc: "Quick waterless exterior foam shine, rim degreasing & tire dressing.",
+      shortDesc: "Quick waterless exterior foam shine, rim degreasing & tire dressing at parking slot.",
       description: "High-pressure foam spray, micro-fiber scratch-free wipe, wheel rim cleaning, exterior glass crystal buffing, and tire shine.",
       durationMinutes: 30,
-      priceByVehicle: { hatchback: 18, sedan: 22, suv: 28, luxury: 35 },
+      priceByVehicle: { hatchback: 299, sedan: 399, suv: 499, luxury: 699 },
       features: [
         "Scratch-free Waterless Wash",
         "Wheel & Tire Shine Dressing",
@@ -64,7 +108,7 @@ async function startServer() {
       shortDesc: "Complete exterior foam wash plus heavy interior vacuum & dashboard sanitize.",
       description: "Our most popular service! Full exterior waterless detail + complete cabin vacuuming, floor mat cleaning, dashboard & console anti-bacterial wipe down, and fragrance booster.",
       durationMinutes: 60,
-      priceByVehicle: { hatchback: 35, sedan: 42, suv: 50, luxury: 62 },
+      priceByVehicle: { hatchback: 699, sedan: 899, suv: 1099, luxury: 1499 },
       features: [
         "All Express Exterior Features",
         "High-Power Trunk & Cabin Vacuum",
@@ -75,60 +119,153 @@ async function startServer() {
       popular: true,
       tag: "Best Value",
     },
+    {
+      id: "srv-3",
+      name: "Ceramic Shield & Wax Polish",
+      category: "ceramic",
+      shortDesc: "Hydrophobic ceramic wax coating with gloss boost & leather conditioning.",
+      description: "Premium liquid ceramic wax coat applied by hand for long-lasting weather protection, mirror shine, UV shield, and deep leather interior conditioning.",
+      durationMinutes: 90,
+      priceByVehicle: { hatchback: 1499, sedan: 1999, suv: 2499, luxury: 3299 },
+      features: [
+        "Full Exterior Wash + Clay Bar Wipe",
+        "90-Day Hydrophobic Ceramic Wax Coating",
+        "Engine Bay Wipe & Dressing",
+        "Leather Seat Deep Conditioning",
+        "Headlight Restoration & Polish",
+      ],
+      popular: false,
+      tag: "Premium Gloss",
+    },
+    {
+      id: "srv-4",
+      name: "Interior Sanitization & AC Steam",
+      category: "interior",
+      shortDesc: "Deep steam disinfection, odor removal & AC vent germ elimination.",
+      description: "Targeted interior cleaning using high-temperature steam spray to eliminate 99.9% of bacteria, allergens, and stubborn odors from vents and upholstery.",
+      durationMinutes: 45,
+      priceByVehicle: { hatchback: 499, sedan: 699, suv: 899, luxury: 1199 },
+      features: [
+        "High-Temp Steam Vents Cleanse",
+        "Upholstery Shampoo & Extraction",
+        "Ozone Anti-Bacterial Treatment",
+        "Pet Hair & Odor Removal",
+      ],
+      popular: false,
+      tag: "Hygiene Shield",
+    },
   ];
 
   let bookings = [
     {
       id: "WASH-9821",
-      customerName: "Sarah Jenkins",
-      customerPhone: "+1 (555) 234-5678",
+      customerName: "Priya Sharma",
+      customerPhone: "+91 98123 45678",
       apartmentId: "apt-1",
-      apartmentName: "Sunrise Towers & Enclave",
-      blockAndSlot: "Tower A, B2-Parking #45",
+      apartmentName: "Prestige Shantiniketan",
+      blockAndSlot: "Tower 12, B2-Parking #104",
       serviceId: "srv-2",
       serviceName: "Deep Interior & Exterior Combo",
       vehicleType: "suv",
-      vehicleMakeModel: "Tesla Model Y",
-      licensePlate: "EV-789-CA",
-      vehicleColor: "Pearl White",
+      vehicleMakeModel: "Tata Harrier Dark Edition",
+      licensePlate: "KA-03-MP-4521",
+      vehicleColor: "Oberon Black",
       date: new Date().toISOString().split("T")[0],
       timeSlot: "08:30 AM - 09:30 AM",
-      price: 50,
-      paymentMethod: "card",
+      price: 1099,
+      paymentMethod: "upi",
       paymentStatus: "paid",
       status: "in_progress",
-      technicianName: "Alex Rivera",
+      technicianName: "Ramesh Kumar",
       notes: "Please watch out for fragile ceramic coating on front hood.",
       createdAt: new Date(Date.now() - 3600000).toISOString(),
     },
     {
       id: "WASH-9822",
-      customerName: "Michael Chang",
-      customerPhone: "+1 (555) 876-5432",
-      apartmentId: "apt-1",
-      apartmentName: "Sunrise Towers & Enclave",
-      blockAndSlot: "Tower C, Slot #12",
+      customerName: "Rahul Verma",
+      customerPhone: "+91 97654 32109",
+      apartmentId: "apt-2",
+      apartmentName: "Sobha Neopolis",
+      blockAndSlot: "Tower 4, Slot #B1-42",
       serviceId: "srv-1",
       serviceName: "Express Exterior Eco-Wash",
       vehicleType: "sedan",
-      vehicleMakeModel: "Honda Accord",
-      licensePlate: "7XYZ-890",
-      vehicleColor: "Midnight Blue",
+      vehicleMakeModel: "Hyundai Verna",
+      licensePlate: "KA-51-MD-9081",
+      vehicleColor: "Titan Grey",
       date: new Date().toISOString().split("T")[0],
       timeSlot: "09:30 AM - 10:30 AM",
-      price: 22,
+      price: 399,
       paymentMethod: "cash_on_wash",
       paymentStatus: "pending",
       status: "assigned",
-      technicianName: "Alex Rivera",
-      notes: "Keys left with basement security guard.",
+      technicianName: "Suresh Nair",
+      notes: "Keys left with basement security supervisor.",
       createdAt: new Date(Date.now() - 7200000).toISOString(),
+    },
+    {
+      id: "WASH-9823",
+      customerName: "Ananya Hegde",
+      customerPhone: "+91 99012 34567",
+      apartmentId: "apt-3",
+      apartmentName: "Brigade Gateway",
+      blockAndSlot: "Block B, Level -1 #88",
+      serviceId: "srv-3",
+      serviceName: "Ceramic Shield & Wax Polish",
+      vehicleType: "luxury",
+      vehicleMakeModel: "BMW 3 Series Gran Limousine",
+      licensePlate: "KA-01-MV-1100",
+      vehicleColor: "Portimao Blue",
+      date: new Date().toISOString().split("T")[0],
+      timeSlot: "10:30 AM - 11:30 AM",
+      price: 3299,
+      paymentMethod: "upi",
+      paymentStatus: "paid",
+      status: "pending",
+      technicianName: "Manjunath Gowda",
+      notes: "Call 5 mins before arrival.",
+      createdAt: new Date(Date.now() - 1800000).toISOString(),
     },
   ];
 
   // API ROUTES
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "Doorstep Car Wash Backend" });
+    res.json({ status: "ok", service: "AquaDoor Car Wash Bangalore Backend", database: "PostgreSQL Schema Ready" });
+  });
+
+  // Auth API Routes
+  app.post("/api/auth/signin", (req, res) => {
+    const { email, role } = req.body;
+    let found = users.find((u) => u.email.toLowerCase() === (email || "").toLowerCase());
+    if (!found) {
+      // Auto register or return default user
+      found = {
+        id: `u-${Date.now()}`,
+        email: email || "user@example.in",
+        fullName: email?.split("@")[0] || "Authenticated User",
+        phone: "+91 98000 00000",
+        role: role || "customer",
+      };
+      users.push(found);
+    }
+    res.json({ success: true, user: found });
+  });
+
+  app.post("/api/auth/signup", (req, res) => {
+    const { fullName, email, phone, role, apartmentId } = req.body;
+    if (!email || !fullName) {
+      return res.status(400).json({ error: "Email and full name required" });
+    }
+    const newUser = {
+      id: `u-${Date.now()}`,
+      email,
+      fullName,
+      phone: phone || "+91 90000 00000",
+      role: role || "customer",
+      apartmentId,
+    };
+    users.push(newUser);
+    res.status(201).json({ success: true, user: newUser });
   });
 
   // Get Apartments
@@ -146,10 +283,10 @@ async function startServer() {
       id: `apt-${Date.now()}`,
       name,
       address,
-      area: area || "Metropolitan Area",
+      area: area || "Bangalore Zone",
       totalBlocks: totalBlocks || 1,
-      assignedTechnician: assignedTechnician || "Lead Tech",
-      activeSlotsCount: 10,
+      assignedTechnician: assignedTechnician || "Zone Lead Tech",
+      activeSlotsCount: 12,
     };
     apartments.push(newApt);
     res.status(201).json({ success: true, data: newApt });

@@ -12,18 +12,18 @@ import {
   AlertCircle,
   MapPin,
   Check,
-  DollarSign,
+  IndianRupee,
   Info,
   Droplets,
-  Award
+  Award,
+  QrCode
 } from 'lucide-react';
 import {
   ApartmentComplex,
   ServicePackage,
   TimeSlot,
   VehicleType,
-  Booking,
-  Vehicle
+  Booking
 } from '../../types';
 
 interface BookingWizardProps {
@@ -49,22 +49,22 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
   // Form State
   const [apartmentId, setApartmentId] = useState<string>(selectedApartment.id);
-  const [blockAndSlot, setBlockAndSlot] = useState<string>('Tower A - Basement Slot #24');
+  const [blockAndSlot, setBlockAndSlot] = useState<string>('Tower 12 - Basement Slot #B2-104');
   
   const [vehicleType, setVehicleType] = useState<VehicleType>('sedan');
-  const [makeModel, setMakeModel] = useState<string>('Honda Civic');
-  const [licensePlate, setLicensePlate] = useState<string>('ABC-8921');
-  const [vehicleColor, setVehicleColor] = useState<string>('Silver');
+  const [makeModel, setMakeModel] = useState<string>('Hyundai Verna');
+  const [licensePlate, setLicensePlate] = useState<string>('KA-03-MP-4521');
+  const [vehicleColor, setVehicleColor] = useState<string>('Starry Night Black');
 
   const [selectedServiceId, setSelectedServiceId] = useState<string>(services[1]?.id || services[0].id);
   
   const [bookingDate, setBookingDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedSlot, setSelectedSlot] = useState<string>(timeSlots[1]?.time || timeSlots[0].time);
 
-  const [customerName, setCustomerName] = useState<string>('Alex Johnson');
-  const [customerPhone, setCustomerPhone] = useState<string>('+1 (555) 987-6543');
-  const [paymentMethod, setPaymentMethod] = useState<'cash_on_wash' | 'card' | 'upi'>('card');
-  const [notes, setNotes] = useState<string>('Keys left with building front gate guard or call me.');
+  const [customerName, setCustomerName] = useState<string>('Priya Sharma');
+  const [customerPhone, setCustomerPhone] = useState<string>('+91 98123 45678');
+  const [paymentMethod, setPaymentMethod] = useState<'cash_on_wash' | 'card' | 'upi'>('upi');
+  const [notes, setNotes] = useState<string>('Keys left with basement security guard or call me.');
 
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
 
@@ -84,7 +84,7 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newBooking = {
+    const newBookingData = {
       customerName,
       customerPhone,
       apartmentId,
@@ -100,615 +100,500 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
       timeSlot: selectedSlot,
       price: calculatedPrice,
       paymentMethod,
-      paymentStatus: paymentMethod === 'cash_on_wash' ? ('pending' as const) : ('paid' as const),
+      paymentStatus: (paymentMethod === 'upi' || paymentMethod === 'card') ? 'paid' as const : 'pending' as const,
       status: 'pending' as const,
       notes,
     };
 
-    onCompleteBooking(newBooking);
-    const mockId = `WASH-${Math.floor(1000 + Math.random() * 9000)}`;
-    setCreatedBookingId(mockId);
+    onCompleteBooking(newBookingData);
+    setCreatedBookingId(`WASH-${Math.floor(1000 + Math.random() * 9000)}`);
+    setStep(5); // Confirmation Screen
   };
 
-  // Helper date buttons
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowObj = new Date();
-  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
-  const tomorrowStr = tomorrowObj.toISOString().split('T')[0];
-
-  const dayAfterObj = new Date();
-  dayAfterObj.setDate(dayAfterObj.getDate() + 2);
-  const dayAfterStr = dayAfterObj.toISOString().split('T')[0];
-
-  if (createdBookingId) {
-    return (
-      <div className="max-w-2xl mx-auto my-8 bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-100 shadow-2xl relative overflow-hidden">
-        <div className="absolute -top-16 -right-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="w-16 h-16 bg-cyan-500/20 text-cyan-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-cyan-500/30 ring-8 ring-cyan-500/10">
-          <CheckCircle className="w-10 h-10 animate-bounce" />
-        </div>
-        <h2 className="text-2xl font-bold text-white mb-1">Wash Scheduled Successfully!</h2>
-        <p className="text-slate-400 text-sm mb-6">
-          Booking Reference: <span className="font-mono text-cyan-400 font-bold">{createdBookingId}</span>
-        </p>
-
-        <div className="bg-slate-950/80 rounded-xl p-5 border border-slate-800 text-left text-xs text-slate-300 space-y-2.5 mb-6">
-          <div className="flex justify-between border-b border-slate-800 pb-2">
-            <span className="text-slate-500">Service:</span>
-            <span className="font-semibold text-white">{currentService.name}</span>
-          </div>
-          <div className="flex justify-between border-b border-slate-800 pb-2">
-            <span className="text-slate-500">Apartment & Slot:</span>
-            <span className="font-semibold text-white">{currentApartment.name} ({blockAndSlot})</span>
-          </div>
-          <div className="flex justify-between border-b border-slate-800 pb-2">
-            <span className="text-slate-500">Scheduled Time:</span>
-            <span className="font-semibold text-cyan-300">{bookingDate} @ {selectedSlot}</span>
-          </div>
-          <div className="flex justify-between border-b border-slate-800 pb-2">
-            <span className="text-slate-500">Vehicle:</span>
-            <span className="font-semibold text-white">{makeModel} ({licensePlate})</span>
-          </div>
-          <div className="flex justify-between pt-1 font-medium text-sm">
-            <span className="text-slate-400">Total Amount:</span>
-            <span className="text-cyan-400 font-bold">${calculatedPrice} ({paymentMethod === 'cash_on_wash' ? 'Pay on Service' : 'Paid Online'})</span>
-          </div>
-        </div>
-
-        <div className="p-4 bg-cyan-950/40 border border-cyan-800/40 rounded-xl text-cyan-200 text-xs text-left mb-6 flex items-start gap-3">
-          <Info className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold mb-0.5">What happens next?</p>
-            <p className="text-slate-300 leading-relaxed">
-              Our technician <span className="text-cyan-300 font-medium">{currentApartment.assignedTechnician || 'Doorstep Specialist'}</span> will arrive at your parking slot with specialized eco-waterless detailing gear. No need to drive anywhere!
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <button
-            onClick={() => {
-              setCreatedBookingId(null);
-              setStep(1);
-            }}
-            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition-all border border-slate-700"
-          >
-            Book Another Wash
-          </button>
-          <button
-            onClick={onViewBookings}
-            className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2"
-          >
-            <Calendar className="w-4 h-4" />
-            Track Wash Progress
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-4xl mx-auto my-6 px-4">
+    <div className="max-w-4xl mx-auto my-6 px-4 space-y-6">
       
-      {/* Wizard Header Progress Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 mb-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-cyan-400">
-              Step {step} of 5
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              {step === 1 && 'Select Your Apartment & Parking Slot'}
-              {step === 2 && 'Vehicle Information'}
-              {step === 3 && 'Choose Wash Package'}
-              {step === 4 && 'Schedule Date & Time Slot'}
-              {step === 5 && 'Review & Confirm Booking'}
-            </h1>
-          </div>
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-            <Droplets className="w-4 h-4 text-cyan-400" />
-            <span>100% Waterless & Scratch-Free</span>
-          </div>
+      {/* Step Indicator Top Progress Bar */}
+      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">
+        <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
+          <span className="font-bold text-cyan-400 uppercase tracking-wider">
+            Step {step} of 5
+          </span>
+          <span className="font-semibold text-slate-300">
+            {step === 1 && 'Select Bangalore Apartment & Slot'}
+            {step === 2 && 'Car Details & Body Type'}
+            {step === 3 && 'Choose Detailing Package'}
+            {step === 4 && 'Date, Time & UPI Payment'}
+            {step === 5 && 'Order Scheduled & Confirmed!'}
+          </span>
         </div>
 
-        {/* Step Indicator Pills */}
-        <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {[
-            { num: 1, label: 'Location', icon: Building2 },
-            { num: 2, label: 'Car Info', icon: Car },
-            { num: 3, label: 'Package', icon: Sparkles },
-            { num: 4, label: 'Schedule', icon: Calendar },
-            { num: 5, label: 'Confirm', icon: CheckCircle },
-          ].map((s) => {
-            const Icon = s.icon;
-            const isActive = step === s.num;
-            const isDone = step > s.num;
-            return (
-              <button
-                key={s.num}
-                onClick={() => {
-                  if (s.num < step) setStep(s.num);
-                }}
-                disabled={s.num > step}
-                className={`flex items-center justify-center sm:justify-start gap-2 p-2 rounded-xl text-xs font-medium transition-all ${
-                  isActive
-                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-                    : isDone
-                    ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800/50 hover:bg-cyan-900/40'
-                    : 'bg-slate-950 text-slate-500 border border-slate-800/80 cursor-not-allowed'
+            { s: 1, label: 'Location' },
+            { s: 2, label: 'Car Info' },
+            { s: 3, label: 'Package' },
+            { s: 4, label: 'Schedule' },
+            { s: 5, label: 'Confirm' },
+          ].map((item) => (
+            <div key={item.s} className="space-y-1">
+              <div
+                className={`h-2 rounded-full transition-all ${
+                  step >= item.s ? 'bg-gradient-to-r from-cyan-500 to-blue-500' : 'bg-slate-800'
+                }`}
+              />
+              <span
+                className={`text-[10px] font-semibold block text-center truncate ${
+                  step >= item.s ? 'text-cyan-300' : 'text-slate-500'
                 }`}
               >
-                <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] ${
-                    isActive
-                      ? 'bg-slate-950 text-cyan-300'
-                      : isDone
-                      ? 'bg-cyan-500 text-slate-950 font-bold'
-                      : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {isDone ? <Check className="w-3 h-3" /> : s.num}
-                </div>
-                <span className="hidden sm:inline truncate">{s.label}</span>
-              </button>
-            );
-          })}
+                {item.label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Main Wizard Step Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+      {/* Main Wizard Form Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
         
-        {/* STEP 1: Apartment Selection */}
+        {/* STEP 1: APARTMENT COMPLEX & PARKING SLOT */}
         {step === 1 && (
           <div className="space-y-6">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                1. Select Serviced Apartment Complex
-              </label>
-              <p className="text-xs text-slate-400 mb-4">
-                We currently deploy dedicated detailing teams directly to these partner complexes.
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-cyan-400" />
+                <span>1. Select Serviced Bangalore Apartment Complex</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                We currently deploy dedicated waterless detailing crews directly to these partner complexes.
               </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {apartments.map((apt) => {
-                  const isSelected = apartmentId === apt.id;
-                  return (
-                    <div
-                      key={apt.id}
-                      onClick={() => {
-                        setApartmentId(apt.id);
-                        onSelectApartment(apt);
-                      }}
-                      className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                        isSelected
-                          ? 'bg-cyan-950/40 border-cyan-500 text-white shadow-lg ring-1 ring-cyan-500/30'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300 hover:bg-slate-950'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className={`p-2.5 rounded-lg shrink-0 ${isSelected ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
-                            <Building2 className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-sm text-white">{apt.name}</h3>
-                            <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                              <MapPin className="w-3 h-3 text-cyan-400" />
-                              {apt.area} • {apt.totalBlocks} Towers/Blocks
-                            </p>
-                          </div>
-                        </div>
-                        {isSelected && <CheckCircle className="w-5 h-5 text-cyan-400 shrink-0" />}
-                      </div>
-
-                      <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Assigned Lead: <strong className="text-slate-200">{apt.assignedTechnician || 'Doorstep Tech'}</strong></span>
-                        <span className="text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/40">
-                          Serviced Daily
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800">
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                2. Enter Your Specific Tower, Block & Parking Spot
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {apartments.map((apt) => (
+                <div
+                  key={apt.id}
+                  onClick={() => {
+                    setApartmentId(apt.id);
+                    onSelectApartment(apt);
+                  }}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                    apartmentId === apt.id
+                      ? 'bg-cyan-500/10 border-cyan-500 shadow-md shadow-cyan-500/10'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm text-white">{apt.name}</h3>
+                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 text-cyan-400" />
+                        <span>{apt.area} • {apt.totalBlocks} Towers</span>
+                      </p>
+                    </div>
+                    {apartmentId === apt.id && (
+                      <CheckCircle className="w-5 h-5 text-cyan-400 shrink-0" />
+                    )}
+                  </div>
+                  <div className="mt-3 text-[11px] text-slate-400 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                    <span>Assigned Lead: <strong className="text-slate-200">{apt.assignedTechnician}</strong></span>
+                    <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">Serviced Daily</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Parking Slot Detail Input */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+              <label className="text-xs font-bold text-slate-300 block">
+                Enter Your Exact Parking Slot & Tower / Block Number:
               </label>
-              <div className="relative">
-                <MapPin className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  value={blockAndSlot}
-                  onChange={(e) => setBlockAndSlot(e.target.value)}
-                  placeholder="e.g., Tower B - Basement Level 2, Slot #B2-45"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-all"
-                  required
-                />
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1.5">
-                Our technician will locate your parked car at this exact spot without bothering you.
+              <input
+                type="text"
+                required
+                placeholder="e.g. Tower 12 - Basement Slot #B2-104"
+                value={blockAndSlot}
+                onChange={(e) => setBlockAndSlot(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              />
+              <p className="text-[11px] text-slate-400 italic">
+                Our detailer uses this location to locate your vehicle in the basement/covered parking slot.
               </p>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>Continue to Vehicle Info</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
 
-        {/* STEP 2: Car Information */}
+        {/* STEP 2: VEHICLE TYPE & DETAILS */}
         {step === 2 && (
           <div className="space-y-6">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                1. Select Vehicle Body Type
-              </label>
-              <p className="text-xs text-slate-400 mb-4">
-                Service pricing varies slightly according to vehicle surface area.
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Car className="w-5 h-5 text-cyan-400" />
+                <span>2. Vehicle Body Type & Car Details</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Pricing scales with vehicle size to ensure full coverage and dedicated attention.
               </p>
+            </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { type: 'hatchback' as const, label: 'Hatchback', desc: 'Mini / Compact', icon: Car },
-                  { type: 'sedan' as const, label: 'Sedan / Coupe', desc: 'Standard 4-Door', icon: Car },
-                  { type: 'suv' as const, label: 'SUV / Crossover', desc: 'Mid & Full Size', icon: Car },
-                  { type: 'luxury' as const, label: 'Luxury / Pickup', desc: 'Truck / Premium', icon: Award },
-                ].map((item) => {
-                  const isSelected = vehicleType === item.type;
-                  const Icon = item.icon;
-                  return (
-                    <div
-                      key={item.type}
-                      onClick={() => setVehicleType(item.type)}
-                      className={`p-4 rounded-xl border cursor-pointer text-center transition-all ${
-                        isSelected
-                          ? 'bg-cyan-950/50 border-cyan-500 text-white shadow-lg ring-1 ring-cyan-500/30'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
-                      }`}
-                    >
-                      <div className={`w-10 h-10 rounded-full mx-auto flex items-center justify-center mb-2 ${isSelected ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <p className="font-semibold text-sm text-white">{item.label}</p>
-                      <p className="text-[11px] text-slate-400">{item.desc}</p>
-                    </div>
-                  );
-                })}
+            {/* Body Type Selection Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { type: 'hatchback' as const, title: 'Hatchback', desc: 'Swift, i20, Altroz' },
+                { type: 'sedan' as const, title: 'Sedan', desc: 'City, Verna, Virtus' },
+                { type: 'suv' as const, title: 'SUV / Crossover', desc: 'Harrier, Creta, Nexon' },
+                { type: 'luxury' as const, title: 'Luxury Class', desc: 'BMW, Audi, Mercedes' },
+              ].map((v) => (
+                <div
+                  key={v.type}
+                  onClick={() => setVehicleType(v.type)}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all text-center ${
+                    vehicleType === v.type
+                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <h3 className="font-bold text-xs text-white mb-0.5">{v.title}</h3>
+                  <p className="text-[10px] text-slate-400">{v.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Vehicle Make & Model</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Tata Harrier Dark Edition"
+                  value={makeModel}
+                  onChange={(e) => setMakeModel(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">License Plate Number</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. KA-03-MP-4521"
+                  value={licensePlate}
+                  onChange={(e) => setLicensePlate(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white uppercase focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Vehicle Color</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Oberon Black"
+                  value={vehicleColor}
+                  onChange={(e) => setVehicleColor(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-800">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Make & Model
-                </label>
-                <input
-                  type="text"
-                  value={makeModel}
-                  onChange={(e) => setMakeModel(e.target.value)}
-                  placeholder="e.g. Honda Civic or Tesla Y"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                  required
-                />
-              </div>
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  License Plate #
-                </label>
-                <input
-                  type="text"
-                  value={licensePlate}
-                  onChange={(e) => setLicensePlate(e.target.value.toUpperCase())}
-                  placeholder="e.g. ABC-1234"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono tracking-wider uppercase"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Vehicle Exterior Color
-                </label>
-                <input
-                  type="text"
-                  value={vehicleColor}
-                  onChange={(e) => setVehicleColor(e.target.value)}
-                  placeholder="e.g. Pearl White, Black"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>Select Wash Package</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: Wash Package Selection */}
+        {/* STEP 3: WASH PACKAGE SELECTION (INR PRICING) */}
         {step === 3 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Select Doorstep Wash Package
-              </label>
-              <span className="text-xs text-cyan-400">
-                Prices customized for <strong className="capitalize">{vehicleType}</strong>
-              </span>
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-cyan-400" />
+                <span>3. Choose Doorstep Detailing Package</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Prices for selected body type: <strong className="text-cyan-300 capitalize">{vehicleType}</strong>
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {services.map((srv) => {
-                const isSelected = selectedServiceId === srv.id;
                 const price = srv.priceByVehicle[vehicleType];
+                const isSelected = selectedServiceId === srv.id;
+
                 return (
                   <div
                     key={srv.id}
                     onClick={() => setSelectedServiceId(srv.id)}
-                    className={`p-5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative ${
+                    className={`p-5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
                       isSelected
-                        ? 'bg-cyan-950/40 border-cyan-500 text-white shadow-xl ring-1 ring-cyan-500/30'
-                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                        ? 'bg-cyan-500/10 border-cyan-500 ring-1 ring-cyan-500/30'
+                        : 'bg-slate-950 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    {srv.popular && (
-                      <span className="absolute -top-2.5 right-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-md">
-                        {srv.tag || 'Most Popular'}
-                      </span>
-                    )}
-
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <h3 className="font-bold text-base text-white">{srv.name}</h3>
-                        <div className="text-right shrink-0">
-                          <span className="text-xl font-extrabold text-cyan-400">${price}</span>
-                          <span className="text-[10px] text-slate-400 block">estimated</span>
-                        </div>
+                        <span className="text-xl font-extrabold text-cyan-400 bg-slate-900 px-3 py-1 rounded-xl border border-slate-800 shrink-0">
+                          ₹{price}
+                        </span>
                       </div>
-
                       <p className="text-xs text-slate-300 mb-3">{srv.shortDesc}</p>
 
-                      <div className="space-y-1.5 mb-4">
-                        {srv.features.map((feat, idx) => (
-                          <div key={idx} className="flex items-center gap-2 text-xs text-slate-400">
-                            <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                            <span>{feat}</span>
+                      <div className="space-y-1">
+                        {srv.features.slice(0, 3).map((f, i) => (
+                          <div key={i} className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                            <Check className="w-3 h-3 text-cyan-400 shrink-0" />
+                            <span>{f}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        ~{srv.durationMinutes} mins
-                      </span>
-                      <span className={`font-semibold ${isSelected ? 'text-cyan-300' : 'text-slate-400'}`}>
-                        {isSelected ? '✓ Selected' : 'Select Package'}
-                      </span>
+                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                      <span className="text-slate-400">{srv.durationMinutes} mins slot duration</span>
+                      {isSelected ? (
+                        <span className="text-cyan-400 font-bold flex items-center gap-1">
+                          <CheckCircle className="w-4 h-4" /> Selected
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">Click to Select</span>
+                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>Schedule Date & Time</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
-        {/* STEP 4: Date & Time Slot Selection */}
+        {/* STEP 4: DATE, TIME & UPI PAYMENT */}
         {step === 4 && (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                1. Select Wash Date
-              </label>
-              
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                {[
-                  { label: 'Today', date: todayStr, sub: 'Immediate Slot' },
-                  { label: 'Tomorrow', date: tomorrowStr, sub: 'Recommended' },
-                  { label: 'Day After', date: dayAfterStr, sub: 'Flexible' },
-                ].map((d) => {
-                  const isSelected = bookingDate === d.date;
-                  return (
-                    <button
-                      type="button"
-                      key={d.date}
-                      onClick={() => setBookingDate(d.date)}
-                      className={`p-3 rounded-xl border text-center transition-all ${
-                        isSelected
-                          ? 'bg-cyan-950/60 border-cyan-500 text-white font-semibold ring-1 ring-cyan-500/30'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                      }`}
-                    >
-                      <p className="text-xs font-bold text-white">{d.label}</p>
-                      <p className="text-[11px] text-cyan-400 my-0.5">{d.date}</p>
-                      <p className="text-[10px] text-slate-500">{d.sub}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-800">
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                2. Select Preferred Time Slot at {currentApartment.name}
-              </label>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {timeSlots.map((slot) => {
-                  const isSelected = selectedSlot === slot.time;
-                  return (
-                    <button
-                      type="button"
-                      key={slot.id}
-                      disabled={!slot.available}
-                      onClick={() => setSelectedSlot(slot.time)}
-                      className={`p-3 rounded-xl border flex items-center justify-between text-left transition-all ${
-                        !slot.available
-                          ? 'bg-slate-950/40 border-slate-800/60 opacity-40 cursor-not-allowed text-slate-600'
-                          : isSelected
-                          ? 'bg-cyan-950/60 border-cyan-500 text-white ring-1 ring-cyan-500/30'
-                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <span className="text-xs font-semibold block">{slot.time}</span>
-                        <span className="text-[10px] text-slate-400 capitalize">{slot.period}</span>
-                      </div>
-                      {isSelected ? (
-                        <CheckCircle className="w-4 h-4 text-cyan-400" />
-                      ) : !slot.available ? (
-                        <span className="text-[9px] uppercase font-bold text-red-400">Full</span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 5: Review & Checkout */}
-        {step === 5 && (
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-3">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2">
-                Booking Summary
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300">
-                <div>
-                  <span className="text-slate-500 block">Service Package:</span>
-                  <span className="font-semibold text-white">{currentService.name}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Location / Apartment:</span>
-                  <span className="font-semibold text-white">{currentApartment.name}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Exact Parking Slot:</span>
-                  <span className="font-semibold text-cyan-300">{blockAndSlot}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Scheduled Date & Time:</span>
-                  <span className="font-semibold text-cyan-300">{bookingDate} @ {selectedSlot}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Vehicle Details:</span>
-                  <span className="font-semibold text-white">{makeModel} ({vehicleColor}) • <span className="font-mono">{licensePlate}</span></span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Total Amount:</span>
-                  <span className="text-lg font-extrabold text-cyan-400">${calculatedPrice}</span>
-                </div>
-              </div>
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-cyan-400" />
+                <span>4. Date, Time Slot & UPI Payment</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Select your preferred wash window for {currentApartment.name}.
+              </p>
             </div>
 
-            {/* Customer Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Full Name
-                </label>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Select Wash Date</label>
+                <input
+                  type="date"
+                  required
+                  value={bookingDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setBookingDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Customer Phone (+91 Bangalore)</label>
                 <input
                   type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Mobile Phone Number
-                </label>
-                <input
-                  type="tel"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
             </div>
 
-            {/* Payment Method */}
+            {/* Time Slots */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                Payment Method
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { id: 'card' as const, label: 'Credit/Debit Card', desc: 'Pay online securely' },
-                  { id: 'cash_on_wash' as const, label: 'Pay on Wash', desc: 'Pay tech after inspection' },
-                  { id: 'upi' as const, label: 'Instant UPI / Wallet', desc: 'Instant 1-click pay' },
-                ].map((pm) => (
+              <label className="text-xs font-semibold text-slate-400 block mb-2">Select Time Window:</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {timeSlots.map((slot) => (
                   <button
+                    key={slot.id}
                     type="button"
-                    key={pm.id}
-                    onClick={() => setPaymentMethod(pm.id)}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      paymentMethod === pm.id
-                        ? 'bg-cyan-950/60 border-cyan-500 text-white ring-1 ring-cyan-500/30'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    disabled={!slot.available}
+                    onClick={() => setSelectedSlot(slot.time)}
+                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all ${
+                      selectedSlot === slot.time
+                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                        : slot.available
+                        ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                        : 'bg-slate-950/40 border-slate-900 text-slate-600 cursor-not-allowed'
                     }`}
                   >
-                    <p className="text-xs font-bold text-white">{pm.label}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{pm.desc}</p>
+                    {slot.time}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Special Instructions */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Special Instructions for Wash Technician (Optional)
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder="e.g. Car is unlocked or key is with security guard..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 resize-none"
-              />
+            {/* Payment Options (UPI / Card / Cash) */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+              <label className="text-xs font-bold text-slate-300 block">Payment Method:</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('upi')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    paymentMethod === 'upi'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4 text-emerald-400 mb-1" />
+                  <span className="text-xs font-bold block">UPI / GPay</span>
+                  <span className="text-[10px] opacity-70 block">Instant QR Pay</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('cash_on_wash')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    paymentMethod === 'cash_on_wash'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <IndianRupee className="w-4 h-4 text-cyan-400 mb-1" />
+                  <span className="text-xs font-bold block">Pay on Wash</span>
+                  <span className="text-[10px] opacity-70 block">Pay after completion</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('card')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    paymentMethod === 'card'
+                      ? 'bg-blue-500/20 border-blue-500 text-blue-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <CheckCircle className="w-4 h-4 text-blue-400 mb-1" />
+                  <span className="text-xs font-bold block">Card / NetBanking</span>
+                  <span className="text-[10px] opacity-70 block">Online Gateway</span>
+                </button>
+              </div>
             </div>
 
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <ShieldCheck className="w-5 h-5" />
-              <span>Confirm & Lock Doorstep Wash (${calculatedPrice})</span>
-            </button>
+            {/* Total Summary Bar */}
+            <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-slate-400 block">Total Wash Fee</span>
+                <span className="text-2xl font-extrabold text-cyan-400">₹{calculatedPrice}</span>
+              </div>
+              <p className="text-xs text-slate-300 text-right">
+                100% Scratch-Free Waterless Detailing • {currentService.name}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+
+              <button
+                type="submit"
+                className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>Confirm & Schedule Wash (₹{calculatedPrice})</span>
+                <CheckCircle className="w-4 h-4" />
+              </button>
+            </div>
           </form>
         )}
 
-        {/* Wizard Footer Controls */}
-        <div className="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between">
-          <button
-            onClick={handleBack}
-            disabled={step === 1}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-              step === 1
-                ? 'opacity-30 cursor-not-allowed text-slate-600'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-            }`}
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span>Previous</span>
-          </button>
+        {/* STEP 5: CONFIRMATION SUCCESS SCREEN */}
+        {step === 5 && (
+          <div className="text-center py-8 space-y-6">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-xl">
+              <CheckCircle className="w-8 h-8 animate-bounce" />
+            </div>
 
-          {step < 5 && (
-            <button
-              onClick={handleNext}
-              className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
-            >
-              <span>Continue to Step {step + 1}</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+            <div>
+              <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/30">
+                Order Reference: {createdBookingId}
+              </span>
+              <h2 className="text-2xl font-bold text-white mt-3">Doorstep Wash Scheduled!</h2>
+              <p className="text-xs text-slate-300 max-w-md mx-auto mt-1">
+                Our lead technician at <strong className="text-white">{currentApartment.name}</strong> will arrive at your slot on <strong className="text-cyan-300">{bookingDate} ({selectedSlot})</strong>.
+              </p>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 max-w-sm mx-auto text-left text-xs space-y-1.5 text-slate-300">
+              <p>📍 Location: <strong className="text-white">{currentApartment.name} ({blockAndSlot})</strong></p>
+              <p>🚘 Vehicle: <strong className="text-white">{makeModel} ({licensePlate})</strong></p>
+              <p>✨ Service: <strong className="text-cyan-400">{currentService.name}</strong></p>
+              <p>💰 Price: <strong className="text-emerald-400">₹{calculatedPrice}</strong> ({paymentMethod.toUpperCase()})</p>
+            </div>
+
+            <div className="flex justify-center gap-3 pt-2">
+              <button
+                onClick={onViewBookings}
+                className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 cursor-pointer"
+              >
+                View My Washes
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
+
     </div>
   );
 };

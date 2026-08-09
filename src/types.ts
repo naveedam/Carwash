@@ -2,6 +2,18 @@ export type WashCategory = 'exterior' | 'interior' | 'full' | 'ceramic';
 
 export type VehicleType = 'hatchback' | 'sedan' | 'suv' | 'luxury';
 
+export type UserRole = 'customer' | 'admin' | 'technician';
+
+export interface User {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: UserRole;
+  apartmentId?: string;
+  apartmentName?: string;
+}
+
 export interface ServicePackage {
   id: string;
   name: string;
@@ -9,7 +21,7 @@ export interface ServicePackage {
   shortDesc: string;
   description: string;
   durationMinutes: number;
-  priceByVehicle: Record<VehicleType, number>;
+  priceByVehicle: Record<VehicleType, number>; // Prices in INR ₹
   features: string[];
   popular?: boolean;
   tag?: string;
@@ -39,7 +51,7 @@ export type BookingStatus = 'pending' | 'assigned' | 'in_progress' | 'completed'
 
 export interface TimeSlot {
   id: string;
-  time: string; // e.g. "07:00 AM - 08:30 AM"
+  time: string; // e.g. "07:30 AM - 08:30 AM"
   period: 'morning' | 'afternoon' | 'evening';
   available: boolean;
 }
@@ -50,7 +62,7 @@ export interface Booking {
   customerPhone: string;
   apartmentId: string;
   apartmentName: string;
-  blockAndSlot: string; // e.g. "Tower B - B1-42"
+  blockAndSlot: string; // e.g. "Tower 12 - Slot B2-104"
   serviceId: string;
   serviceName: string;
   vehicleType: VehicleType;
@@ -59,7 +71,7 @@ export interface Booking {
   vehicleColor: string;
   date: string; // YYYY-MM-DD
   timeSlot: string;
-  price: number;
+  price: number; // in INR ₹
   paymentMethod: 'cash_on_wash' | 'card' | 'upi';
   paymentStatus: 'paid' | 'pending';
   status: BookingStatus;
