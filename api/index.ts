@@ -287,119 +287,131 @@ const mapUser = (row: any) => ({
   apartmentId: row.apartment_id,
 });
 
-// Auto DB Schema Initialization helper
+// Auto DB Schema Initialization helper (Optimized & Memoized for Serverless)
+let isSchemaInitialized = false;
+let schemaInitPromise: Promise<void> | null = null;
+
 async function ensureDbSchema() {
-  if (!pool) return;
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id VARCHAR(100) PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        full_name VARCHAR(255) NOT NULL,
-        phone VARCHAR(50),
-        role VARCHAR(50) DEFAULT 'customer',
-        apartment_id VARCHAR(100),
-        password_hash TEXT
-      );
-    `);
+  if (!pool || isSchemaInitialized) return;
+  if (schemaInitPromise) return schemaInitPromise;
 
-    await pool.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS apartments (
-        id VARCHAR(100) PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        address TEXT NOT NULL,
-        area VARCHAR(255),
-        total_blocks INT DEFAULT 1,
-        assigned_technician VARCHAR(255),
-        active_slots_count INT DEFAULT 12
-      );
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS services (
-        id VARCHAR(100) PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        category VARCHAR(50) NOT NULL,
-        short_desc TEXT,
-        description TEXT,
-        duration_minutes INT,
-        price_by_vehicle JSONB,
-        features JSONB,
-        popular BOOLEAN DEFAULT false,
-        tag VARCHAR(100)
-      );
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS bookings (
-        id VARCHAR(100) PRIMARY KEY,
-        customer_name VARCHAR(255) NOT NULL,
-        customer_phone VARCHAR(50),
-        apartment_id VARCHAR(100),
-        apartment_name VARCHAR(255),
-        block_and_slot VARCHAR(255),
-        service_id VARCHAR(100),
-        service_name VARCHAR(255),
-        vehicle_type VARCHAR(50),
-        vehicle_make_model VARCHAR(255),
-        license_plate VARCHAR(50),
-        vehicle_color VARCHAR(50),
-        date VARCHAR(20),
-        time_slot VARCHAR(100),
-        price NUMERIC,
-        payment_method VARCHAR(50),
-        payment_status VARCHAR(50),
-        status VARCHAR(50) DEFAULT 'pending',
-        technician_name VARCHAR(255),
-        notes TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    // Seed default initial records if tables are empty
-    const aptCheck = await pool.query("SELECT COUNT(*) FROM apartments");
-    if (parseInt(aptCheck.rows[0].count) === 0) {
-      for (const apt of apartments) {
-        await pool.query(
-          `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
-           VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
-          [apt.id, apt.name, apt.address, apt.area, apt.totalBlocks, apt.assignedTechnician, apt.activeSlotsCount]
+  schemaInitPromise = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(100) PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          full_name VARCHAR(255) NOT NULL,
+          phone VARCHAR(50),
+          role VARCHAR(50) DEFAULT 'customer',
+          apartment_id VARCHAR(100),
+          password_hash TEXT
         );
-      }
-    }
 
-    const srvCheck = await pool.query("SELECT COUNT(*) FROM services");
-    if (parseInt(srvCheck.rows[0].count) === 0) {
-      for (const srv of services) {
-        await pool.query(
-          `INSERT INTO services (id, name, category, short_desc, description, duration_minutes, price_by_vehicle, features, popular, tag)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
-          [
-            srv.id, srv.name, srv.category, srv.shortDesc, srv.description,
-            srv.durationMinutes, JSON.stringify(srv.priceByVehicle),
-            JSON.stringify(srv.features), srv.popular, srv.tag
-          ]
-        );
-      }
-    }
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
-    const userCheck = await pool.query("SELECT COUNT(*) FROM users");
-    if (parseInt(userCheck.rows[0].count) === 0) {
-      for (const u of users) {
-        await pool.query(
-          `INSERT INTO users (id, email, full_name, phone, role, apartment_id)
-           VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
-          [u.id, u.email, u.fullName, u.phone, u.role, u.apartmentId || null]
+        CREATE TABLE IF NOT EXISTS apartments (
+          id VARCHAR(100) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          address TEXT NOT NULL,
+          area VARCHAR(255),
+          total_blocks INT DEFAULT 1,
+          assigned_technician VARCHAR(255),
+          active_slots_count INT DEFAULT 12
         );
+
+        CREATE TABLE IF NOT EXISTS services (
+          id VARCHAR(100) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          category VARCHAR(50) NOT NULL,
+          short_desc TEXT,
+          description TEXT,
+          duration_minutes INT,
+          price_by_vehicle JSONB,
+          features JSONB,
+          popular BOOLEAN DEFAULT false,
+          tag VARCHAR(100)
+        );
+
+        CREATE TABLE IF NOT EXISTS bookings (
+          id VARCHAR(100) PRIMARY KEY,
+          customer_name VARCHAR(255) NOT NULL,
+          customer_phone VARCHAR(50),
+          apartment_id VARCHAR(100),
+          apartment_name VARCHAR(255),
+          block_and_slot VARCHAR(255),
+          service_id VARCHAR(100),
+          service_name VARCHAR(255),
+          vehicle_type VARCHAR(50),
+          vehicle_make_model VARCHAR(255),
+          license_plate VARCHAR(50),
+          vehicle_color VARCHAR(50),
+          date VARCHAR(20),
+          time_slot VARCHAR(100),
+          price NUMERIC,
+          payment_method VARCHAR(50),
+          payment_status VARCHAR(50),
+          status VARCHAR(50) DEFAULT 'pending',
+          technician_name VARCHAR(255),
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      const checkResult = await pool.query(`
+        SELECT 
+          (SELECT COUNT(*) FROM apartments) AS apt_count,
+          (SELECT COUNT(*) FROM services) AS srv_count,
+          (SELECT COUNT(*) FROM users) AS usr_count
+      `);
+
+      const aptCount = parseInt(checkResult.rows[0]?.apt_count || "0", 10);
+      const srvCount = parseInt(checkResult.rows[0]?.srv_count || "0", 10);
+      const usrCount = parseInt(checkResult.rows[0]?.usr_count || "0", 10);
+
+      if (aptCount === 0) {
+        for (const apt of apartments) {
+          await pool.query(
+            `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+            [apt.id, apt.name, apt.address, apt.area, apt.totalBlocks, apt.assignedTechnician, apt.activeSlotsCount]
+          );
+        }
       }
+
+      if (srvCount === 0) {
+        for (const srv of services) {
+          await pool.query(
+            `INSERT INTO services (id, name, category, short_desc, description, duration_minutes, price_by_vehicle, features, popular, tag)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
+            [
+              srv.id, srv.name, srv.category, srv.shortDesc, srv.description,
+              srv.durationMinutes, JSON.stringify(srv.priceByVehicle),
+              JSON.stringify(srv.features), srv.popular, srv.tag
+            ]
+          );
+        }
+      }
+
+      if (usrCount === 0) {
+        for (const u of users) {
+          await pool.query(
+            `INSERT INTO users (id, email, full_name, phone, role, apartment_id)
+             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+            [u.id, u.email, u.fullName, u.phone, u.role, u.apartmentId || null]
+          );
+        }
+      }
+
+      isSchemaInitialized = true;
+    } catch (err) {
+      console.error("Vercel DB schema init error:", err);
+    } finally {
+      schemaInitPromise = null;
     }
-  } catch (err) {
-    console.error("Vercel DB schema init error:", err);
-  }
+  })();
+
+  return schemaInitPromise;
 }
 
 // API Routes

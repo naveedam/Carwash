@@ -375,8 +375,18 @@ async function startServer() {
       `);
 
       // Seed default initial records if tables are empty
-      const aptCheck = await pool.query("SELECT COUNT(*) FROM apartments");
-      if (parseInt(aptCheck.rows[0].count) === 0) {
+      const checkResult = await pool.query(`
+        SELECT 
+          (SELECT COUNT(*) FROM apartments) AS apt_count,
+          (SELECT COUNT(*) FROM services) AS srv_count,
+          (SELECT COUNT(*) FROM users) AS usr_count
+      `);
+
+      const aptCount = parseInt(checkResult.rows[0]?.apt_count || "0", 10);
+      const srvCount = parseInt(checkResult.rows[0]?.srv_count || "0", 10);
+      const usrCount = parseInt(checkResult.rows[0]?.usr_count || "0", 10);
+
+      if (aptCount === 0) {
         for (const apt of apartments) {
           await pool.query(
             `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
@@ -386,8 +396,7 @@ async function startServer() {
         }
       }
 
-      const srvCheck = await pool.query("SELECT COUNT(*) FROM services");
-      if (parseInt(srvCheck.rows[0].count) === 0) {
+      if (srvCount === 0) {
         for (const srv of services) {
           await pool.query(
             `INSERT INTO services (id, name, category, short_desc, description, duration_minutes, price_by_vehicle, features, popular, tag)
@@ -401,8 +410,7 @@ async function startServer() {
         }
       }
 
-      const userCheck = await pool.query("SELECT COUNT(*) FROM users");
-      if (parseInt(userCheck.rows[0].count) === 0) {
+      if (usrCount === 0) {
         for (const u of users) {
           await pool.query(
             `INSERT INTO users (id, email, full_name, phone, role, apartment_id)
@@ -818,4 +826,3 @@ async function startServer() {
 }
 
 startServer();
-
