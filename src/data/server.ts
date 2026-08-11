@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import pkg from "pg";
+import bcrypt from "bcryptjs";
 const { Pool } = pkg;
 
 async function startServer() {
@@ -311,8 +312,11 @@ async function startServer() {
           full_name VARCHAR(255) NOT NULL,
           phone VARCHAR(50),
           role VARCHAR(50) DEFAULT 'customer',
-          apartment_id VARCHAR(100)
+          apartment_id VARCHAR(100),
+          password_hash TEXT
         );
+
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
         CREATE TABLE IF NOT EXISTS apartments (
           id VARCHAR(100) PRIMARY KEY,
@@ -440,23 +444,86 @@ async function startServer() {
     });
   });
 
-  // Auth API Routes
+  // Dedicated Database Health Check & Status Endpoint
+  app.get("/api/health/db-status", async (_req, res) => {
+    const isDbUrlDetected = Boolean(process.env.DATABASE_URL);
+
+    if (pool) {
+      try {
+        const result = await pool.query(`
+          SELECT 
+            current_database() AS db_name, 
+            pg_is_in_recovery() AS in_recovery,
+            (SELECT COUNT(*) FROM users) AS total_users,
+            (SELECT COUNT(*) FROM bookings) AS total_bookings,
+            (SELECT COUNT(*) FROM apartments) AS total_apartments
+        `);
+
+        const row = result.rows[0];
+        return res.json({
+          status: "ok",
+          connected: true,
+          database_url_detected: isDbUrlDetected,
+          storage_mode: "PostgreSQL (Cloud Persistent)",
+          database_name: row.db_name,
+          is_in_recovery: row.in_recovery,
+          total_registered_users: parseInt(row.total_users || "0", 10),
+          total_bookings: parseInt(row.total_bookings || "0", 10),
+          total_apartments: parseInt(row.total_apartments || "0", 10),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        console.error("Database health check error:", err);
+        return res.status(500).json({
+          status: "error",
+          connected: false,
+          database_url_detected: isDbUrlDetected,
+          storage_mode: "PostgreSQL (Connection Error)",
+          error: err?.message || "Failed to query database",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    return res.json({
+      status: "ok",
+      connected: false,
+      database_url_detected: isDbUrlDetected,
+      storage_mode: "In-Memory (Fallback)",
+      total_registered_users: users.length,
+      total_bookings: bookings.length,
+      total_apartments: apartments.length,
+      message: "DATABASE_URL environment variable is not configured. Server is operating in transient in-memory mode.",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Auth API Routes (Bcrypt Password Hashing & Verification)
   app.post("/api/auth/signin", async (req, res) => {
-    const { email, role } = req.body;
+    const { email, password, role } = req.body;
     const cleanEmail = (email || "").trim().toLowerCase();
 
     if (pool) {
       try {
         const result = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1", [cleanEmail]);
         if (result.rows.length > 0) {
-          return res.json({ success: true, user: mapUser(result.rows[0]) });
+          const dbUser = result.rows[0];
+          // If password_hash exists on record and user supplied password, verify hash
+          if (dbUser.password_hash && password) {
+            const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+            if (!isValidPassword) {
+              return res.status(401).json({ error: "Invalid email or password" });
+            }
+          }
+          return res.json({ success: true, user: mapUser(dbUser) });
         } else {
           const newId = `u-${Date.now()}`;
           const newName = email?.split("@")[0] || "Authenticated User";
+          const passwordHash = password ? await bcrypt.hash(password, 10) : null;
           const insertResult = await pool.query(
-            `INSERT INTO users (id, email, full_name, phone, role)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [newId, cleanEmail || "user@example.in", newName, "+91 98000 00000", role || "customer"]
+            `INSERT INTO users (id, email, full_name, phone, role, password_hash)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [newId, cleanEmail || "user@example.in", newName, "+91 98000 00000", role || "customer", passwordHash]
           );
           return res.json({ success: true, user: mapUser(insertResult.rows[0]) });
         }
@@ -477,25 +544,33 @@ async function startServer() {
       };
       users.push(found);
     }
-    res.json({ success: true, user: found });
+    res.json({ success: true, user: mapUser(found) });
   });
 
   app.post("/api/auth/signup", async (req, res) => {
-    const { fullName, email, phone, role, apartmentId } = req.body;
+    const { fullName, email, phone, role, apartmentId, password } = req.body;
     if (!email || !fullName) {
       return res.status(400).json({ error: "Email and full name required" });
     }
     const cleanEmail = email.trim().toLowerCase();
 
+    let passwordHash: string | null = null;
+    if (password) {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
     if (pool) {
       try {
         const newId = `u-${Date.now()}`;
         const insertResult = await pool.query(
-          `INSERT INTO users (id, email, full_name, phone, role, apartment_id)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, phone = EXCLUDED.phone
+          `INSERT INTO users (id, email, full_name, phone, role, apartment_id, password_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (email) DO UPDATE SET 
+             full_name = EXCLUDED.full_name, 
+             phone = EXCLUDED.phone,
+             password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash)
            RETURNING *`,
-          [newId, cleanEmail, fullName, phone || "+91 90000 00000", role || "customer", apartmentId || null]
+          [newId, cleanEmail, fullName, phone || "+91 90000 00000", role || "customer", apartmentId || null, passwordHash]
         );
         return res.status(201).json({ success: true, user: mapUser(insertResult.rows[0]) });
       } catch (err) {
@@ -513,7 +588,7 @@ async function startServer() {
       apartmentId,
     };
     users.push(newUser);
-    res.status(201).json({ success: true, user: newUser });
+    res.status(201).json({ success: true, user: mapUser(newUser) });
   });
 
   // Get Apartments
