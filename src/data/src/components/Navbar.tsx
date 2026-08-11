@@ -5,12 +5,8 @@ import {
   Car,
   Calendar,
   MapPin,
-  Database,
   LogIn,
   LogOut,
-  UserCheck,
-  User as UserIcon,
-  IndianRupee
 } from 'lucide-react';
 import { ViewMode, CustomerTab, ApartmentComplex, User } from '../types';
 
@@ -26,7 +22,6 @@ interface NavbarProps {
   currentUser: User | null;
   onOpenAuth: () => void;
   onLogout: () => void;
-  onOpenDbGuide: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -41,7 +36,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onOpenAuth,
   onLogout,
-  onOpenDbGuide,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 text-white shadow-lg">

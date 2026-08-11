@@ -5,7 +5,6 @@ import { ActiveBookings } from './components/customer/ActiveBookings';
 import { ServicesCatalog } from './components/customer/ServicesCatalog';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
-import { DatabaseGuideModal } from './components/DatabaseGuideModal';
 import {
   APARTMENT_COMPLEXES,
   SERVICE_PACKAGES,
@@ -22,7 +21,7 @@ import {
   BookingStatus,
   User
 } from './types';
-import { CheckCircle2, Database, Shield } from 'lucide-react';
+import { CheckCircle2, Shield } from 'lucide-react';
 
 export default function App() {
   // Navigation & View State
@@ -32,10 +31,22 @@ export default function App() {
   // Auth & User State
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('aqua_user');
-    return saved ? JSON.parse(saved) : null; // Public visitors start in signed-out state by default
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.id === 'u-1' || parsed.id === 'u-cust1' || parsed.email === 'priya.sharma@example.in' || parsed.fullName === 'Priya Sharma') {
+          localStorage.removeItem('aqua_user');
+          return null;
+        }
+        return parsed;
+      } catch {
+        localStorage.removeItem('aqua_user');
+        return null;
+      }
+    }
+    return null; // Public visitors start in signed-out state by default
   });
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
-  const [isDbGuideOpen, setIsDbGuideOpen] = useState<boolean>(false);
 
   // Data Persistence State
   const [apartments, setApartments] = useState<ApartmentComplex[]>(() => {
@@ -204,7 +215,6 @@ export default function App() {
           setCurrentUser(null);
           showToast('Signed out successfully.');
         }}
-        onOpenDbGuide={() => setIsDbGuideOpen(true)}
       />
 
       {/* Toast Notification */}
@@ -225,12 +235,6 @@ export default function App() {
           if (user.role === 'admin') setViewMode('admin');
         }}
         apartments={apartments}
-      />
-
-      {/* Database Guide Modal */}
-      <DatabaseGuideModal
-        isOpen={isDbGuideOpen}
-        onClose={() => setIsDbGuideOpen(false)}
       />
 
       {/* Main Content Router */}
@@ -286,14 +290,8 @@ export default function App() {
             <span>•</span>
             <span>Doorstep Waterless Vehicle Detailing</span>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsDbGuideOpen(true)}
-              className="hover:text-cyan-400 underline flex items-center gap-1 cursor-pointer"
-            >
-              <Database className="w-3 h-3 text-cyan-400" />
-              <span>SQL Schema & Database Documentation</span>
-            </button>
+          <div className="text-slate-500 text-[11px]">
+            © {new Date().getFullYear()} AquaDoor Technologies. All rights reserved.
           </div>
         </div>
       </footer>
