@@ -15,12 +15,20 @@ async function startServer() {
   let pool: pkg.Pool | null = null;
   if (process.env.DATABASE_URL) {
     console.log("DATABASE_URL detected! Connecting to PostgreSQL database...");
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes("localhost")
-        ? false
-        : { rejectUnauthorized: false },
-    });
+    try {
+      pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DATABASE_URL.includes("localhost")
+          ? false
+          : { rejectUnauthorized: false },
+        connectionTimeoutMillis: 5000,
+      });
+      pool.on("error", (err) => {
+        console.error("Unexpected error on idle client", err);
+      });
+    } catch (err) {
+      console.error("Failed to create Pool:", err);
+    }
   } else {
     console.log("No DATABASE_URL found. Running with in-memory store.");
   }
@@ -474,7 +482,7 @@ async function startServer() {
         });
       } catch (err: any) {
         console.error("Database health check error:", err);
-        return res.status(500).json({
+        return res.status(200).json({
           status: "error",
           connected: false,
           database_url_detected: isDbUrlDetected,

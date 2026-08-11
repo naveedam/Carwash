@@ -17,12 +17,20 @@ app.use((req, _res, next) => {
 // PostgreSQL Connection Pool (Uses DATABASE_URL if present)
 let pool: pkg.Pool | null = null;
 if (process.env.DATABASE_URL) {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL.includes("localhost")
-      ? false
-      : { rejectUnauthorized: false },
-  });
+  try {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_URL.includes("localhost")
+        ? false
+        : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000,
+    });
+    pool.on("error", (err) => {
+      console.error("Unexpected Postgres pool idle client error:", err);
+    });
+  } catch (err) {
+    console.error("Failed to initialize Pool:", err);
+  }
 }
 
 // In-Memory MVP Data Store (Fallback)
@@ -293,9 +301,13 @@ async function ensureDbSchema() {
         apartment_id VARCHAR(100),
         password_hash TEXT
       );
+    `);
 
+    await pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS apartments (
         id VARCHAR(100) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -305,7 +317,9 @@ async function ensureDbSchema() {
         assigned_technician VARCHAR(255),
         active_slots_count INT DEFAULT 12
       );
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS services (
         id VARCHAR(100) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -318,7 +332,9 @@ async function ensureDbSchema() {
         popular BOOLEAN DEFAULT false,
         tag VARCHAR(100)
       );
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS bookings (
         id VARCHAR(100) PRIMARY KEY,
         customer_name VARCHAR(255) NOT NULL,
@@ -387,7 +403,7 @@ async function ensureDbSchema() {
 }
 
 // API Routes
-app.get("/api/health", async (_req, res) => {
+app.get(["/api/health", "/health"], async (_req, res) => {
   let dbStatus = "In-Memory Store";
   if (pool) {
     try {
@@ -404,7 +420,7 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.get("/api/health/db-status", async (_req, res) => {
+app.get(["/api/health/db-status", "/health/db-status"], async (_req, res) => {
   const isDbUrlDetected = Boolean(process.env.DATABASE_URL);
 
   if (pool) {
@@ -434,7 +450,7 @@ app.get("/api/health/db-status", async (_req, res) => {
       });
     } catch (err: any) {
       console.error("Database health check error:", err);
-      return res.status(500).json({
+      return res.status(200).json({
         status: "error",
         connected: false,
         database_url_detected: isDbUrlDetected,
