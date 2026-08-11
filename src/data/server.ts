@@ -1,9 +1,10 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import pkg from "pg";
+import pg from "pg";
 import bcrypt from "bcryptjs";
-const { Pool } = pkg;
+
+const Pool = pg?.Pool || (pg as any)?.default?.Pool;
 
 async function startServer() {
   const app = express();
@@ -12,7 +13,7 @@ async function startServer() {
   app.use(express.json());
 
   // PostgreSQL Connection Pool (Uses DATABASE_URL if present)
-  let pool: pkg.Pool | null = null;
+  let pool: any = null;
   if (process.env.DATABASE_URL) {
     console.log("DATABASE_URL detected! Connecting to PostgreSQL database...");
     try {
@@ -826,3 +827,4 @@ async function startServer() {
 }
 
 startServer();
+

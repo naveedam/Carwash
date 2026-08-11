@@ -1,35 +1,58 @@
 import express from "express";
-import pkg from "pg";
+import pg from "pg";
 import bcrypt from "bcryptjs";
-const { Pool } = pkg;
+
+// Extract Pool safely across ESM/CJS bundling modes in Vercel Node runtime
+const Pool = pg?.Pool || (pg as any)?.default?.Pool;
+
+async function comparePassword(password: string, hash: string): Promise<boolean> {
+  const fn = bcrypt?.compare || (bcrypt as any)?.default?.compare;
+  if (typeof fn === "function") {
+    return fn(password, hash);
+  }
+  return false;
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const fn = bcrypt?.hash || (bcrypt as any)?.default?.hash;
+  if (typeof fn === "function") {
+    return fn(password, 10);
+  }
+  return password;
+}
 
 const app = express();
 app.use(express.json());
 
 // Normalize Vercel serverless rewritten URLs so routes matching /api/* work seamlessly
 app.use((req, _res, next) => {
-  if (req.url && !req.url.startsWith("/api")) {
+  const forwardedUrl = (req.headers["x-forwarded-url"] as string) || (req.headers["x-matched-path"] as string);
+  if (forwardedUrl && forwardedUrl.startsWith("/api")) {
+    req.url = forwardedUrl;
+  } else if (req.url && !req.url.startsWith("/api")) {
     req.url = "/api" + req.url;
   }
   next();
 });
 
 // PostgreSQL Connection Pool (Uses DATABASE_URL if present)
-let pool: pkg.Pool | null = null;
-if (process.env.DATABASE_URL) {
+let pool: any = null;
+const rawDbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, '');
+
+if (rawDbUrl && Pool) {
   try {
+    const isLocal = rawDbUrl.includes("localhost") || rawDbUrl.includes("127.0.0.1");
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes("localhost")
-        ? false
-        : { rejectUnauthorized: false },
+      connectionString: rawDbUrl,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
       connectionTimeoutMillis: 5000,
     });
-    pool.on("error", (err) => {
+    pool.on("error", (err: any) => {
       console.error("Unexpected Postgres pool idle client error:", err);
     });
   } catch (err) {
     console.error("Failed to initialize Pool:", err);
+    pool = null;
   }
 }
 
@@ -297,6 +320,7 @@ async function ensureDbSchema() {
 
   schemaInitPromise = (async () => {
     try {
+      // Execute table creations individually so errors in one query don't halt the rest
       await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
           id VARCHAR(100) PRIMARY KEY,
@@ -307,9 +331,13 @@ async function ensureDbSchema() {
           apartment_id VARCHAR(100),
           password_hash TEXT
         );
+      `).catch(err => console.error("users table init error:", err.message));
 
+      await pool.query(`
         ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+      `).catch(err => console.error("users alter column error:", err.message));
 
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS apartments (
           id VARCHAR(100) PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
@@ -319,7 +347,9 @@ async function ensureDbSchema() {
           assigned_technician VARCHAR(255),
           active_slots_count INT DEFAULT 12
         );
+      `).catch(err => console.error("apartments table init error:", err.message));
 
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS services (
           id VARCHAR(100) PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
@@ -332,7 +362,9 @@ async function ensureDbSchema() {
           popular BOOLEAN DEFAULT false,
           tag VARCHAR(100)
         );
+      `).catch(err => console.error("services table init error:", err.message));
 
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS bookings (
           id VARCHAR(100) PRIMARY KEY,
           customer_name VARCHAR(255) NOT NULL,
@@ -356,50 +388,52 @@ async function ensureDbSchema() {
           notes TEXT,
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
-      `);
+      `).catch(err => console.error("bookings table init error:", err.message));
 
       const checkResult = await pool.query(`
         SELECT 
           (SELECT COUNT(*) FROM apartments) AS apt_count,
           (SELECT COUNT(*) FROM services) AS srv_count,
           (SELECT COUNT(*) FROM users) AS usr_count
-      `);
+      `).catch(() => null);
 
-      const aptCount = parseInt(checkResult.rows[0]?.apt_count || "0", 10);
-      const srvCount = parseInt(checkResult.rows[0]?.srv_count || "0", 10);
-      const usrCount = parseInt(checkResult.rows[0]?.usr_count || "0", 10);
+      if (checkResult) {
+        const aptCount = parseInt(checkResult.rows[0]?.apt_count || "0", 10);
+        const srvCount = parseInt(checkResult.rows[0]?.srv_count || "0", 10);
+        const usrCount = parseInt(checkResult.rows[0]?.usr_count || "0", 10);
 
-      if (aptCount === 0) {
-        for (const apt of apartments) {
-          await pool.query(
-            `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
-            [apt.id, apt.name, apt.address, apt.area, apt.totalBlocks, apt.assignedTechnician, apt.activeSlotsCount]
-          );
+        if (aptCount === 0) {
+          for (const apt of apartments) {
+            await pool.query(
+              `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
+               VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+              [apt.id, apt.name, apt.address, apt.area, apt.totalBlocks, apt.assignedTechnician, apt.activeSlotsCount]
+            ).catch(() => {});
+          }
         }
-      }
 
-      if (srvCount === 0) {
-        for (const srv of services) {
-          await pool.query(
-            `INSERT INTO services (id, name, category, short_desc, description, duration_minutes, price_by_vehicle, features, popular, tag)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
-            [
-              srv.id, srv.name, srv.category, srv.shortDesc, srv.description,
-              srv.durationMinutes, JSON.stringify(srv.priceByVehicle),
-              JSON.stringify(srv.features), srv.popular, srv.tag
-            ]
-          );
+        if (srvCount === 0) {
+          for (const srv of services) {
+            await pool.query(
+              `INSERT INTO services (id, name, category, short_desc, description, duration_minutes, price_by_vehicle, features, popular, tag)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
+              [
+                srv.id, srv.name, srv.category, srv.shortDesc, srv.description,
+                srv.durationMinutes, JSON.stringify(srv.priceByVehicle),
+                JSON.stringify(srv.features), srv.popular, srv.tag
+              ]
+            ).catch(() => {});
+          }
         }
-      }
 
-      if (usrCount === 0) {
-        for (const u of users) {
-          await pool.query(
-            `INSERT INTO users (id, email, full_name, phone, role, apartment_id)
-             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
-            [u.id, u.email, u.fullName, u.phone, u.role, u.apartmentId || null]
-          );
+        if (usrCount === 0) {
+          for (const u of users) {
+            await pool.query(
+              `INSERT INTO users (id, email, full_name, phone, role, apartment_id)
+               VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+              [u.id, u.email, u.fullName, u.phone, u.role, u.apartmentId || null]
+            ).catch(() => {});
+          }
         }
       }
 
@@ -497,7 +531,7 @@ app.post("/api/auth/signin", async (req, res) => {
       if (result.rows.length > 0) {
         const dbUser = result.rows[0];
         if (dbUser.password_hash && password) {
-          const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+          const isValidPassword = await comparePassword(password, dbUser.password_hash);
           if (!isValidPassword) {
             return res.status(401).json({ error: "Invalid email or password" });
           }
@@ -506,7 +540,7 @@ app.post("/api/auth/signin", async (req, res) => {
       } else {
         const newId = `u-${Date.now()}`;
         const newName = email?.split("@")[0] || "Authenticated User";
-        const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+        const passwordHash = password ? await hashPassword(password) : null;
         const insertResult = await pool.query(
           `INSERT INTO users (id, email, full_name, phone, role, password_hash)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
@@ -542,7 +576,7 @@ app.post("/api/auth/signup", async (req, res) => {
 
   let passwordHash: string | null = null;
   if (password) {
-    passwordHash = await bcrypt.hash(password, 10);
+    passwordHash = await hashPassword(password);
   }
 
   if (pool) {
@@ -769,6 +803,37 @@ app.patch("/api/bookings/:id", async (req, res) => {
   if (status) booking.status = status;
   if (technicianName) booking.technicianName = technicianName;
   res.json({ success: true, data: booking });
+});
+
+// Root API Welcome route
+app.get(["/", "/api", "/api/"], (_req, res) => {
+  res.json({
+    message: "AquaDoor Car Wash Vercel Serverless API Running",
+    status: "ok",
+    endpoints: [
+      "/api/health",
+      "/api/health/db-status",
+      "/api/apartments",
+      "/api/services",
+      "/api/bookings",
+      "/api/auth/signin",
+      "/api/auth/signup",
+    ],
+  });
+});
+
+// Fallback for unhandled API routes
+app.use((_req, res) => {
+  res.status(404).json({ error: "API Route Not Found" });
+});
+
+// Global Express Error Handler for Serverless
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Vercel API Serverless Unhandled Error:", err);
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: err?.message || "An unexpected error occurred",
+  });
 });
 
 export default app;
