@@ -52,7 +52,8 @@ const isPlaceholderUrl = (url?: string) => {
     lower.includes("host:5432") ||
     lower.includes("your_password") ||
     lower.includes("<password>") ||
-    lower.includes("ep-example-123456")
+    lower.includes("ep-example-123456") ||
+    lower.includes("postgres.database.azure.com")
   );
 };
 
@@ -636,10 +637,13 @@ app.get("/api/apartments", async (_req, res) => {
   if (pool) {
     try {
       await ensureDbSchema();
-      const result = await pool.query("SELECT * FROM apartments ORDER BY name ASC");
-      return res.json({ success: true, data: result.rows.map(mapApartment) });
-    } catch (err) {
-      console.error("Database get apartments error:", err);
+      if (pool) {
+        const result = await pool.query("SELECT * FROM apartments ORDER BY name ASC");
+        return res.json({ success: true, data: result.rows.map(mapApartment) });
+      }
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Get apartments error, falling back to in-memory:", err?.message || err);
+      pool = null;
     }
   }
   res.json({ success: true, data: apartments });
@@ -654,21 +658,24 @@ app.post("/api/apartments", async (req, res) => {
   if (pool) {
     try {
       await ensureDbSchema();
-      const newId = `apt-${Date.now()}`;
-      const result = await pool.query(
-        `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [
-          newId, name, address,
-          area || "Bangalore Zone",
-          totalBlocks || 1,
-          assignedTechnician || "Zone Lead Tech",
-          12
-        ]
-      );
-      return res.status(201).json({ success: true, data: mapApartment(result.rows[0]) });
-    } catch (err) {
-      console.error("Database add apartment error:", err);
+      if (pool) {
+        const newId = `apt-${Date.now()}`;
+        const result = await pool.query(
+          `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [
+            newId, name, address,
+            area || "Bangalore Zone",
+            totalBlocks || 1,
+            assignedTechnician || "Zone Lead Tech",
+            12
+          ]
+        );
+        return res.status(201).json({ success: true, data: mapApartment(result.rows[0]) });
+      }
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Add apartment error, falling back to in-memory:", err?.message || err);
+      pool = null;
     }
   }
 
@@ -689,10 +696,13 @@ app.get("/api/services", async (_req, res) => {
   if (pool) {
     try {
       await ensureDbSchema();
-      const result = await pool.query("SELECT * FROM services ORDER BY name ASC");
-      return res.json({ success: true, data: result.rows.map(mapService) });
-    } catch (err) {
-      console.error("Database get services error:", err);
+      if (pool) {
+        const result = await pool.query("SELECT * FROM services ORDER BY name ASC");
+        return res.json({ success: true, data: result.rows.map(mapService) });
+      }
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Get services error, falling back to in-memory:", err?.message || err);
+      pool = null;
     }
   }
   res.json({ success: true, data: services });
@@ -704,29 +714,32 @@ app.get("/api/bookings", async (req, res) => {
   if (pool) {
     try {
       await ensureDbSchema();
-      let query = "SELECT * FROM bookings";
-      const params: any[] = [];
-      const conditions: string[] = [];
+      if (pool) {
+        let query = "SELECT * FROM bookings";
+        const params: any[] = [];
+        const conditions: string[] = [];
 
-      if (apartment_id) {
-        params.push(apartment_id);
-        conditions.push(`apartment_id = $${params.length}`);
-      }
-      if (date) {
-        params.push(date);
-        conditions.push(`date = $${params.length}`);
-      }
+        if (apartment_id) {
+          params.push(apartment_id);
+          conditions.push(`apartment_id = $${params.length}`);
+        }
+        if (date) {
+          params.push(date);
+          conditions.push(`date = $${params.length}`);
+        }
 
-      if (conditions.length > 0) {
-        query += " WHERE " + conditions.join(" AND ");
-      }
-      query += " ORDER BY created_at DESC";
+        if (conditions.length > 0) {
+          query += " WHERE " + conditions.join(" AND ");
+        }
+        query += " ORDER BY created_at DESC";
 
-      const result = await pool.query(query, params);
-      const mapped = result.rows.map(mapBooking);
-      return res.json({ success: true, count: mapped.length, data: mapped });
-    } catch (err) {
-      console.error("Database get bookings error:", err);
+        const result = await pool.query(query, params);
+        const mapped = result.rows.map(mapBooking);
+        return res.json({ success: true, count: mapped.length, data: mapped });
+      }
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Get bookings error, falling back to in-memory:", err?.message || err);
+      pool = null;
     }
   }
 
@@ -753,33 +766,36 @@ app.post("/api/bookings", async (req, res) => {
   if (pool) {
     try {
       await ensureDbSchema();
-      const result = await pool.query(
-        `INSERT INTO bookings (
-          id, customer_name, customer_phone, apartment_id, apartment_name,
-          block_and_slot, service_id, service_name, vehicle_type, vehicle_make_model,
-          license_plate, vehicle_color, date, time_slot, price,
-          payment_method, payment_status, status, technician_name, notes, created_at
-        ) VALUES (
-          $1, $2, $3, $4, $5,
-          $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15,
-          $16, $17, $18, $19, $20, $21
-        ) RETURNING *`,
-        [
-          bookingId, bData.customerName, bData.customerPhone || null,
-          bData.apartmentId, bData.apartmentName || null,
-          bData.blockAndSlot || null, bData.serviceId, bData.serviceName || null,
-          bData.vehicleType || null, bData.vehicleMakeModel || null,
-          bData.licensePlate || null, bData.vehicleColor || null,
-          bData.date || null, bData.timeSlot || null, bData.price || 0,
-          bData.paymentMethod || 'upi', bData.paymentStatus || 'pending',
-          status, bData.technicianName || 'Unassigned', bData.notes || null,
-          createdAt
-        ]
-      );
-      return res.status(201).json({ success: true, data: mapBooking(result.rows[0]) });
-    } catch (err) {
-      console.error("Database create booking error:", err);
+      if (pool) {
+        const result = await pool.query(
+          `INSERT INTO bookings (
+            id, customer_name, customer_phone, apartment_id, apartment_name,
+            block_and_slot, service_id, service_name, vehicle_type, vehicle_make_model,
+            license_plate, vehicle_color, date, time_slot, price,
+            payment_method, payment_status, status, technician_name, notes, created_at
+          ) VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15,
+            $16, $17, $18, $19, $20, $21
+          ) RETURNING *`,
+          [
+            bookingId, bData.customerName, bData.customerPhone || null,
+            bData.apartmentId, bData.apartmentName || null,
+            bData.blockAndSlot || null, bData.serviceId, bData.serviceName || null,
+            bData.vehicleType || null, bData.vehicleMakeModel || null,
+            bData.licensePlate || null, bData.vehicleColor || null,
+            bData.date || null, bData.timeSlot || null, bData.price || 0,
+            bData.paymentMethod || 'upi', bData.paymentStatus || 'pending',
+            status, bData.technicianName || 'Unassigned', bData.notes || null,
+            createdAt
+          ]
+        );
+        return res.status(201).json({ success: true, data: mapBooking(result.rows[0]) });
+      }
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Create booking error, falling back to in-memory:", err?.message || err);
+      pool = null;
     }
   }
 
@@ -800,20 +816,23 @@ app.patch("/api/bookings/:id", async (req, res) => {
   if (pool) {
     try {
       await ensureDbSchema();
-      const result = await pool.query(
-        `UPDATE bookings
-         SET status = COALESCE($1, status),
-             technician_name = COALESCE($2, technician_name)
-         WHERE id = $3
-         RETURNING *`,
-        [status || null, technicianName || null, id]
-      );
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: "Booking not found" });
+      if (pool) {
+        const result = await pool.query(
+          `UPDATE bookings
+           SET status = COALESCE($1, status),
+               technician_name = COALESCE($2, technician_name)
+           WHERE id = $3
+           RETURNING *`,
+          [status || null, technicianName || null, id]
+        );
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: "Booking not found" });
+        }
+        return res.json({ success: true, data: mapBooking(result.rows[0]) });
       }
-      return res.json({ success: true, data: mapBooking(result.rows[0]) });
-    } catch (err) {
-      console.error("Database update booking error:", err);
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Update booking error, falling back to in-memory:", err?.message || err);
+      pool = null;
     }
   }
 

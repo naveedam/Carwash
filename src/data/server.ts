@@ -29,7 +29,8 @@ async function startServer() {
       lower.includes("host:5432") ||
       lower.includes("your_password") ||
       lower.includes("<password>") ||
-      lower.includes("ep-example-123456")
+      lower.includes("ep-example-123456") ||
+      lower.includes("postgres.database.azure.com")
     );
   };
 
