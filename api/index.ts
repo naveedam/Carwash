@@ -1,5 +1,7 @@
 import express from "express";
+// @ts-ignore
 import pg from "pg";
+// @ts-ignore
 import bcrypt from "bcryptjs";
 
 // Extract Pool safely across ESM/CJS bundling modes in Vercel Node runtime

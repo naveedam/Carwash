@@ -1,6 +1,12 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+// @ts-ignore
+import pg from "pg";
+// @ts-ignore
+import bcrypt from "bcryptjs";
+
+const Pool = pg?.Pool || (pg as any)?.default?.Pool;
 
 async function startServer() {
   const app = express();
@@ -8,11 +14,33 @@ async function startServer() {
 
   app.use(express.json());
 
-  // In-Memory MVP Data Store with Bangalore Real Apartments & INR Pricing
+  // PostgreSQL Connection Pool (Uses DATABASE_URL if present)
+  let pool: any = null;
+  if (process.env.DATABASE_URL) {
+    console.log("DATABASE_URL detected! Connecting to PostgreSQL database...");
+    try {
+      pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DATABASE_URL.includes("localhost")
+          ? false
+          : { rejectUnauthorized: false },
+        connectionTimeoutMillis: 5000,
+      });
+      pool.on("error", (err) => {
+        console.error("Unexpected error on idle client", err);
+      });
+    } catch (err) {
+      console.error("Failed to create Pool:", err);
+    }
+  } else {
+    console.log("No DATABASE_URL found. Running with in-memory store.");
+  }
+
+  // In-Memory MVP Data Store (Fallback)
   let users = [
     {
       id: "u-admin",
-      email: "admin@aquadoor.in",
+      email: "naveedahmedm@gmail.com",
       fullName: "Naveed Ahmed (Operations Manager)",
       phone: "+91 98765 43210",
       role: "admin",
@@ -228,57 +256,401 @@ async function startServer() {
     },
   ];
 
-  // API ROUTES
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "AquaDoor Car Wash Bangalore Backend", database: "PostgreSQL Schema Ready" });
+  // Database Mappers for pg rows
+  const mapApartment = (row: any) => ({
+    id: row.id,
+    name: row.name,
+    address: row.address,
+    area: row.area,
+    totalBlocks: Number(row.total_blocks),
+    assignedTechnician: row.assigned_technician,
+    activeSlotsCount: Number(row.active_slots_count),
   });
 
-  // Auth API Routes
-  app.post("/api/auth/signin", (req, res) => {
-    const { email, role } = req.body;
-    let found = users.find((u) => u.email.toLowerCase() === (email || "").toLowerCase());
+  const mapService = (row: any) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    shortDesc: row.short_desc,
+    description: row.description,
+    durationMinutes: Number(row.duration_minutes),
+    priceByVehicle: typeof row.price_by_vehicle === "string" ? JSON.parse(row.price_by_vehicle) : row.price_by_vehicle,
+    features: typeof row.features === "string" ? JSON.parse(row.features) : row.features,
+    popular: Boolean(row.popular),
+    tag: row.tag,
+  });
+
+  const mapBooking = (row: any) => ({
+    id: row.id,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone,
+    apartmentId: row.apartment_id,
+    apartmentName: row.apartment_name,
+    blockAndSlot: row.block_and_slot,
+    serviceId: row.service_id,
+    serviceName: row.service_name,
+    vehicleType: row.vehicle_type,
+    vehicleMakeModel: row.vehicle_make_model,
+    licensePlate: row.license_plate,
+    vehicleColor: row.vehicle_color,
+    date: row.date,
+    timeSlot: row.time_slot,
+    price: Number(row.price),
+    paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
+    status: row.status,
+    technicianName: row.technician_name,
+    notes: row.notes,
+    createdAt: row.created_at,
+  });
+
+  const mapUser = (row: any) => ({
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    phone: row.phone,
+    role: row.role,
+    apartmentId: row.apartment_id,
+  });
+
+  // DB Initialization & Schema Migration Handler
+  if (pool) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(100) PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          full_name VARCHAR(255) NOT NULL,
+          phone VARCHAR(50),
+          role VARCHAR(50) DEFAULT 'customer',
+          apartment_id VARCHAR(100),
+          password_hash TEXT
+        );
+
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+
+        CREATE TABLE IF NOT EXISTS apartments (
+          id VARCHAR(100) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          address TEXT NOT NULL,
+          area VARCHAR(255),
+          total_blocks INT DEFAULT 1,
+          assigned_technician VARCHAR(255),
+          active_slots_count INT DEFAULT 12
+        );
+
+        CREATE TABLE IF NOT EXISTS services (
+          id VARCHAR(100) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          category VARCHAR(50) NOT NULL,
+          short_desc TEXT,
+          description TEXT,
+          duration_minutes INT,
+          price_by_vehicle JSONB,
+          features JSONB,
+          popular BOOLEAN DEFAULT false,
+          tag VARCHAR(100)
+        );
+
+        CREATE TABLE IF NOT EXISTS bookings (
+          id VARCHAR(100) PRIMARY KEY,
+          customer_name VARCHAR(255) NOT NULL,
+          customer_phone VARCHAR(50),
+          apartment_id VARCHAR(100),
+          apartment_name VARCHAR(255),
+          block_and_slot VARCHAR(255),
+          service_id VARCHAR(100),
+          service_name VARCHAR(255),
+          vehicle_type VARCHAR(50),
+          vehicle_make_model VARCHAR(255),
+          license_plate VARCHAR(50),
+          vehicle_color VARCHAR(50),
+          date VARCHAR(20),
+          time_slot VARCHAR(100),
+          price NUMERIC,
+          payment_method VARCHAR(50),
+          payment_status VARCHAR(50),
+          status VARCHAR(50) DEFAULT 'pending',
+          technician_name VARCHAR(255),
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // Seed default initial records if tables are empty
+      const checkResult = await pool.query(`
+        SELECT 
+          (SELECT COUNT(*) FROM apartments) AS apt_count,
+          (SELECT COUNT(*) FROM services) AS srv_count,
+          (SELECT COUNT(*) FROM users) AS usr_count
+      `);
+
+      const aptCount = parseInt(checkResult.rows[0]?.apt_count || "0", 10);
+      const srvCount = parseInt(checkResult.rows[0]?.srv_count || "0", 10);
+      const usrCount = parseInt(checkResult.rows[0]?.usr_count || "0", 10);
+
+      if (aptCount === 0) {
+        for (const apt of apartments) {
+          await pool.query(
+            `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
+            [apt.id, apt.name, apt.address, apt.area, apt.totalBlocks, apt.assignedTechnician, apt.activeSlotsCount]
+          );
+        }
+      }
+
+      if (srvCount === 0) {
+        for (const srv of services) {
+          await pool.query(
+            `INSERT INTO services (id, name, category, short_desc, description, duration_minutes, price_by_vehicle, features, popular, tag)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
+            [
+              srv.id, srv.name, srv.category, srv.shortDesc, srv.description,
+              srv.durationMinutes, JSON.stringify(srv.priceByVehicle),
+              JSON.stringify(srv.features), srv.popular, srv.tag
+            ]
+          );
+        }
+      }
+
+      if (usrCount === 0) {
+        for (const u of users) {
+          await pool.query(
+            `INSERT INTO users (id, email, full_name, phone, role, apartment_id)
+             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+            [u.id, u.email, u.fullName, u.phone, u.role, u.apartmentId || null]
+          );
+        }
+      }
+
+      const bookingCheck = await pool.query("SELECT COUNT(*) FROM bookings");
+      if (parseInt(bookingCheck.rows[0].count) === 0) {
+        for (const b of bookings) {
+          await pool.query(
+            `INSERT INTO bookings (id, customer_name, customer_phone, apartment_id, apartment_name, block_and_slot, service_id, service_name, vehicle_type, vehicle_make_model, license_plate, vehicle_color, date, time_slot, price, payment_method, payment_status, status, technician_name, notes, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) ON CONFLICT DO NOTHING`,
+            [
+              b.id, b.customerName, b.customerPhone, b.apartmentId, b.apartmentName,
+              b.blockAndSlot, b.serviceId, b.serviceName, b.vehicleType, b.vehicleMakeModel,
+              b.licensePlate, b.vehicleColor, b.date, b.timeSlot, b.price,
+              b.paymentMethod, b.paymentStatus, b.status, b.technicianName, b.notes, b.createdAt
+            ]
+          );
+        }
+      }
+
+      console.log("PostgreSQL database setup and seeding complete!");
+    } catch (err) {
+      console.error("Error setting up PostgreSQL database tables:", err);
+    }
+  }
+
+  // API ROUTES
+  app.get("/api/health", async (_req, res) => {
+    let dbStatus = "In-Memory Store";
+    if (pool) {
+      try {
+        await pool.query("SELECT 1");
+        dbStatus = "PostgreSQL Connected";
+      } catch {
+        dbStatus = "PostgreSQL Connection Error";
+      }
+    }
+    res.json({
+      status: "ok",
+      service: "AquaDoor Car Wash Bangalore Backend",
+      database: dbStatus,
+    });
+  });
+
+  // Dedicated Database Health Check & Status Endpoint
+  app.get("/api/health/db-status", async (_req, res) => {
+    const isDbUrlDetected = Boolean(process.env.DATABASE_URL);
+
+    if (pool) {
+      try {
+        const result = await pool.query(`
+          SELECT 
+            current_database() AS db_name, 
+            pg_is_in_recovery() AS in_recovery,
+            (SELECT COUNT(*) FROM users) AS total_users,
+            (SELECT COUNT(*) FROM bookings) AS total_bookings,
+            (SELECT COUNT(*) FROM apartments) AS total_apartments
+        `);
+
+        const row = result.rows[0];
+        return res.json({
+          status: "ok",
+          connected: true,
+          database_url_detected: isDbUrlDetected,
+          storage_mode: "PostgreSQL (Cloud Persistent)",
+          database_name: row.db_name,
+          is_in_recovery: row.in_recovery,
+          total_registered_users: parseInt(row.total_users || "0", 10),
+          total_bookings: parseInt(row.total_bookings || "0", 10),
+          total_apartments: parseInt(row.total_apartments || "0", 10),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        console.error("Database health check error:", err);
+        return res.status(200).json({
+          status: "error",
+          connected: false,
+          database_url_detected: isDbUrlDetected,
+          storage_mode: "PostgreSQL (Connection Error)",
+          error: err?.message || "Failed to query database",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    return res.json({
+      status: "ok",
+      connected: false,
+      database_url_detected: isDbUrlDetected,
+      storage_mode: "In-Memory (Fallback)",
+      total_registered_users: users.length,
+      total_bookings: bookings.length,
+      total_apartments: apartments.length,
+      message: "DATABASE_URL environment variable is not configured. Server is operating in transient in-memory mode.",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Auth API Routes (Bcrypt Password Hashing & Verification)
+  app.post("/api/auth/signin", async (req, res) => {
+    const { email, password, role } = req.body;
+    const cleanEmail = (email || "").trim().toLowerCase();
+
+    if (pool) {
+      try {
+        const result = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1", [cleanEmail]);
+        if (result.rows.length > 0) {
+          const dbUser = result.rows[0];
+          // If password_hash exists on record and user supplied password, verify hash
+          if (dbUser.password_hash && password) {
+            const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+            if (!isValidPassword) {
+              return res.status(401).json({ error: "Invalid email or password" });
+            }
+          }
+          return res.json({ success: true, user: mapUser(dbUser) });
+        } else {
+          const newId = `u-${Date.now()}`;
+          const newName = email?.split("@")[0] || "Authenticated User";
+          const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+          const insertResult = await pool.query(
+            `INSERT INTO users (id, email, full_name, phone, role, password_hash)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [newId, cleanEmail || "user@example.in", newName, "+91 98000 00000", role || "customer", passwordHash]
+          );
+          return res.json({ success: true, user: mapUser(insertResult.rows[0]) });
+        }
+      } catch (err) {
+        console.error("Database signin error:", err);
+      }
+    }
+
+    // Fallback to in-memory
+    let found = users.find((u) => u.email.toLowerCase() === cleanEmail);
     if (!found) {
-      // Auto register or return default user
       found = {
         id: `u-${Date.now()}`,
-        email: email || "user@example.in",
+        email: cleanEmail || "user@example.in",
         fullName: email?.split("@")[0] || "Authenticated User",
         phone: "+91 98000 00000",
         role: role || "customer",
       };
       users.push(found);
     }
-    res.json({ success: true, user: found });
+    res.json({ success: true, user: mapUser(found) });
   });
 
-  app.post("/api/auth/signup", (req, res) => {
-    const { fullName, email, phone, role, apartmentId } = req.body;
+  app.post("/api/auth/signup", async (req, res) => {
+    const { fullName, email, phone, role, apartmentId, password } = req.body;
     if (!email || !fullName) {
       return res.status(400).json({ error: "Email and full name required" });
     }
+    const cleanEmail = email.trim().toLowerCase();
+
+    let passwordHash: string | null = null;
+    if (password) {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    if (pool) {
+      try {
+        const newId = `u-${Date.now()}`;
+        const insertResult = await pool.query(
+          `INSERT INTO users (id, email, full_name, phone, role, apartment_id, password_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (email) DO UPDATE SET 
+             full_name = EXCLUDED.full_name, 
+             phone = EXCLUDED.phone,
+             password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash)
+           RETURNING *`,
+          [newId, cleanEmail, fullName, phone || "+91 90000 00000", role || "customer", apartmentId || null, passwordHash]
+        );
+        return res.status(201).json({ success: true, user: mapUser(insertResult.rows[0]) });
+      } catch (err) {
+        console.error("Database signup error:", err);
+      }
+    }
+
+    // Fallback to in-memory
     const newUser = {
       id: `u-${Date.now()}`,
-      email,
+      email: cleanEmail,
       fullName,
       phone: phone || "+91 90000 00000",
       role: role || "customer",
       apartmentId,
     };
     users.push(newUser);
-    res.status(201).json({ success: true, user: newUser });
+    res.status(201).json({ success: true, user: mapUser(newUser) });
   });
 
   // Get Apartments
-  app.get("/api/apartments", (_req, res) => {
+  app.get("/api/apartments", async (_req, res) => {
+    if (pool) {
+      try {
+        const result = await pool.query("SELECT * FROM apartments ORDER BY name ASC");
+        return res.json({ success: true, data: result.rows.map(mapApartment) });
+      } catch (err) {
+        console.error("Database get apartments error:", err);
+      }
+    }
     res.json({ success: true, data: apartments });
   });
 
   // Add Apartment
-  app.post("/api/apartments", (req, res) => {
+  app.post("/api/apartments", async (req, res) => {
     const { name, address, area, totalBlocks, assignedTechnician } = req.body;
     if (!name || !address) {
       return res.status(400).json({ error: "Apartment name and address required" });
     }
+
+    if (pool) {
+      try {
+        const newId = `apt-${Date.now()}`;
+        const result = await pool.query(
+          `INSERT INTO apartments (id, name, address, area, total_blocks, assigned_technician, active_slots_count)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [
+            newId, name, address,
+            area || "Bangalore Zone",
+            totalBlocks || 1,
+            assignedTechnician || "Zone Lead Tech",
+            12
+          ]
+        );
+        return res.status(201).json({ success: true, data: mapApartment(result.rows[0]) });
+      } catch (err) {
+        console.error("Database add apartment error:", err);
+      }
+    }
+
+    // Fallback
     const newApt = {
       id: `apt-${Date.now()}`,
       name,
@@ -293,13 +665,51 @@ async function startServer() {
   });
 
   // Get Services
-  app.get("/api/services", (_req, res) => {
+  app.get("/api/services", async (_req, res) => {
+    if (pool) {
+      try {
+        const result = await pool.query("SELECT * FROM services ORDER BY name ASC");
+        return res.json({ success: true, data: result.rows.map(mapService) });
+      } catch (err) {
+        console.error("Database get services error:", err);
+      }
+    }
     res.json({ success: true, data: services });
   });
 
   // Get Bookings (Filterable by apartment_id or date)
-  app.get("/api/bookings", (req, res) => {
+  app.get("/api/bookings", async (req, res) => {
     const { apartment_id, date } = req.query;
+
+    if (pool) {
+      try {
+        let query = "SELECT * FROM bookings";
+        const params: any[] = [];
+        const conditions: string[] = [];
+
+        if (apartment_id) {
+          params.push(apartment_id);
+          conditions.push(`apartment_id = $${params.length}`);
+        }
+        if (date) {
+          params.push(date);
+          conditions.push(`date = $${params.length}`);
+        }
+
+        if (conditions.length > 0) {
+          query += " WHERE " + conditions.join(" AND ");
+        }
+        query += " ORDER BY created_at DESC";
+
+        const result = await pool.query(query, params);
+        const mapped = result.rows.map(mapBooking);
+        return res.json({ success: true, count: mapped.length, data: mapped });
+      } catch (err) {
+        console.error("Database get bookings error:", err);
+      }
+    }
+
+    // Fallback to memory
     let filtered = [...bookings];
     if (apartment_id) {
       filtered = filtered.filter((b) => b.apartmentId === apartment_id);
@@ -311,25 +721,84 @@ async function startServer() {
   });
 
   // Create Booking
-  app.post("/api/bookings", (req, res) => {
+  app.post("/api/bookings", async (req, res) => {
     const bData = req.body;
     if (!bData.customerName || !bData.apartmentId || !bData.serviceId) {
       return res.status(400).json({ error: "Missing required booking details" });
     }
+
+    const bookingId = `WASH-${Math.floor(1000 + Math.random() * 9000)}`;
+    const createdAt = new Date().toISOString();
+    const status = bData.status || "pending";
+
+    if (pool) {
+      try {
+        const result = await pool.query(
+          `INSERT INTO bookings (
+            id, customer_name, customer_phone, apartment_id, apartment_name,
+            block_and_slot, service_id, service_name, vehicle_type, vehicle_make_model,
+            license_plate, vehicle_color, date, time_slot, price,
+            payment_method, payment_status, status, technician_name, notes, created_at
+          ) VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15,
+            $16, $17, $18, $19, $20, $21
+          ) RETURNING *`,
+          [
+            bookingId, bData.customerName, bData.customerPhone || null,
+            bData.apartmentId, bData.apartmentName || null,
+            bData.blockAndSlot || null, bData.serviceId, bData.serviceName || null,
+            bData.vehicleType || null, bData.vehicleMakeModel || null,
+            bData.licensePlate || null, bData.vehicleColor || null,
+            bData.date || null, bData.timeSlot || null, bData.price || 0,
+            bData.paymentMethod || 'upi', bData.paymentStatus || 'pending',
+            status, bData.technicianName || 'Unassigned', bData.notes || null,
+            createdAt
+          ]
+        );
+        return res.status(201).json({ success: true, data: mapBooking(result.rows[0]) });
+      } catch (err) {
+        console.error("Database create booking error:", err);
+      }
+    }
+
+    // Fallback
     const newBooking = {
       ...bData,
-      id: `WASH-${Math.floor(1000 + Math.random() * 9000)}`,
-      createdAt: new Date().toISOString(),
-      status: bData.status || "pending",
+      id: bookingId,
+      createdAt,
+      status,
     };
     bookings.unshift(newBooking);
     res.status(201).json({ success: true, data: newBooking });
   });
 
   // Update Booking Status or Technician
-  app.patch("/api/bookings/:id", (req, res) => {
+  app.patch("/api/bookings/:id", async (req, res) => {
     const { id } = req.params;
     const { status, technicianName } = req.body;
+
+    if (pool) {
+      try {
+        const result = await pool.query(
+          `UPDATE bookings
+           SET status = COALESCE($1, status),
+               technician_name = COALESCE($2, technician_name)
+           WHERE id = $3
+           RETURNING *`,
+          [status || null, technicianName || null, id]
+        );
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: "Booking not found" });
+        }
+        return res.json({ success: true, data: mapBooking(result.rows[0]) });
+      } catch (err) {
+        console.error("Database update booking error:", err);
+      }
+    }
+
+    // Fallback
     const booking = bookings.find((b) => b.id === id);
     if (!booking) {
       return res.status(404).json({ error: "Booking not found" });
@@ -360,3 +829,4 @@ async function startServer() {
 }
 
 startServer();
+
