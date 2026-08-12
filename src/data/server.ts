@@ -1,7 +1,9 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+// @ts-ignore
 import pg from "pg";
+// @ts-ignore
 import bcrypt from "bcryptjs";
 
 const Pool = pg?.Pool || (pg as any)?.default?.Pool;
@@ -14,22 +16,43 @@ async function startServer() {
 
   // PostgreSQL Connection Pool (Uses DATABASE_URL if present)
   let pool: any = null;
-  if (process.env.DATABASE_URL) {
+  const rawDbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, '');
+
+  const isPlaceholderUrl = (url?: string) => {
+    if (!url) return true;
+    const lower = url.toLowerCase();
+    return (
+      lower.includes("example.com") ||
+      lower.includes("ep-example") ||
+      lower.includes("user:password") ||
+      lower.includes("your_database_url") ||
+      lower.includes("host:5432") ||
+      lower.includes("your_password") ||
+      lower.includes("<password>") ||
+      lower.includes("ep-example-123456")
+    );
+  };
+
+  if (rawDbUrl && Pool && !isPlaceholderUrl(rawDbUrl)) {
     console.log("DATABASE_URL detected! Connecting to PostgreSQL database...");
     try {
       pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.DATABASE_URL.includes("localhost")
+        connectionString: rawDbUrl,
+        ssl: rawDbUrl.includes("localhost")
           ? false
           : { rejectUnauthorized: false },
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 3000,
       });
-      pool.on("error", (err) => {
-        console.error("Unexpected error on idle client", err);
+      pool.on("error", (err: any) => {
+        console.warn("[PostgreSQL] Pool error, switching to in-memory store:", err?.message || err);
+        pool = null;
       });
     } catch (err) {
       console.error("Failed to create Pool:", err);
+      pool = null;
     }
+  } else if (rawDbUrl && isPlaceholderUrl(rawDbUrl)) {
+    console.log("[Database] DATABASE_URL is set to a placeholder host. Running with in-memory store.");
   } else {
     console.log("No DATABASE_URL found. Running with in-memory store.");
   }
@@ -438,8 +461,9 @@ async function startServer() {
       }
 
       console.log("PostgreSQL database setup and seeding complete!");
-    } catch (err) {
-      console.error("Error setting up PostgreSQL database tables:", err);
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Error setting up database tables, switching to in-memory store:", err?.message || err);
+      pool = null;
     }
   }
 

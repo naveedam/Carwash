@@ -41,21 +41,39 @@ app.use((req, _res, next) => {
 let pool: any = null;
 const rawDbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, '');
 
-if (rawDbUrl && Pool) {
+const isPlaceholderUrl = (url?: string) => {
+  if (!url) return true;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("example.com") ||
+    lower.includes("ep-example") ||
+    lower.includes("user:password") ||
+    lower.includes("your_database_url") ||
+    lower.includes("host:5432") ||
+    lower.includes("your_password") ||
+    lower.includes("<password>") ||
+    lower.includes("ep-example-123456")
+  );
+};
+
+if (rawDbUrl && Pool && !isPlaceholderUrl(rawDbUrl)) {
   try {
     const isLocal = rawDbUrl.includes("localhost") || rawDbUrl.includes("127.0.0.1");
     pool = new Pool({
       connectionString: rawDbUrl,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 3000,
     });
     pool.on("error", (err: any) => {
-      console.error("Unexpected Postgres pool idle client error:", err);
+      console.warn("[PostgreSQL] Pool error, switching to in-memory store:", err?.message || err);
+      pool = null;
     });
   } catch (err) {
     console.error("Failed to initialize Pool:", err);
     pool = null;
   }
+} else if (rawDbUrl && isPlaceholderUrl(rawDbUrl)) {
+  console.log("[Database] DATABASE_URL is set to a placeholder host. Using in-memory store.");
 }
 
 // In-Memory MVP Data Store (Fallback)
@@ -440,8 +458,9 @@ async function ensureDbSchema() {
       }
 
       isSchemaInitialized = true;
-    } catch (err) {
-      console.error("Vercel DB schema init error:", err);
+    } catch (err: any) {
+      console.warn("[PostgreSQL] Schema init error, switching to in-memory store:", err?.message || err);
+      pool = null;
     } finally {
       schemaInitPromise = null;
     }
