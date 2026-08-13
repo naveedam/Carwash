@@ -57,6 +57,9 @@ const isPlaceholderUrl = (url?: string) => {
   );
 };
 
+let poolInitError: string | null = null;
+let rejectedAsPlaceholder = false;
+
 if (rawDbUrl && Pool && !isPlaceholderUrl(rawDbUrl)) {
   try {
     const isLocal = rawDbUrl.includes("localhost") || rawDbUrl.includes("127.0.0.1");
@@ -67,14 +70,17 @@ if (rawDbUrl && Pool && !isPlaceholderUrl(rawDbUrl)) {
     });
     pool.on("error", (err: any) => {
       console.warn("[PostgreSQL] Pool error, switching to in-memory store:", err?.message || err);
+      poolInitError = err?.message || String(err);
       pool = null;
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Failed to initialize Pool:", err);
+    poolInitError = err?.message || String(err);
     pool = null;
   }
 } else if (rawDbUrl && isPlaceholderUrl(rawDbUrl)) {
   console.log("[Database] DATABASE_URL is set to a placeholder host. Using in-memory store.");
+  rejectedAsPlaceholder = true;
 }
 
 // In-Memory MVP Data Store (Fallback)
@@ -529,15 +535,25 @@ app.get(["/api/health/db-status", "/health/db-status"], async (_req, res) => {
     }
   }
 
+  const noPoolReason = !isDbUrlDetected
+    ? "DATABASE_URL environment variable is not configured."
+    : rejectedAsPlaceholder
+      ? "DATABASE_URL is set but its value matched a known placeholder pattern (e.g. example.com, your_password, <password>) and was rejected. Check the actual value in Vercel -> Settings -> Environment Variables."
+      : poolInitError
+        ? `DATABASE_URL is set but the connection pool failed: ${poolInitError}`
+        : "DATABASE_URL is set but no connection pool was created (unknown reason -- check Vercel function logs).";
+
   return res.json({
     status: "ok",
     connected: false,
     database_url_detected: isDbUrlDetected,
+    database_url_looks_like_placeholder: rejectedAsPlaceholder,
+    pool_init_error: poolInitError,
     storage_mode: "In-Memory (Fallback)",
     total_registered_users: users.length,
     total_bookings: bookings.length,
     total_apartments: apartments.length,
-    message: "DATABASE_URL environment variable is not configured. Running with in-memory transient store.",
+    message: noPoolReason + " Running with in-memory transient store.",
     timestamp: new Date().toISOString(),
   });
 });
